@@ -1,0 +1,1097 @@
+# Complete Flutter Quran App Code
+
+## File Structure
+```
+lib/
+├── main.dart
+├── models/
+│   └── surah_info.dart
+├── pages/
+│   ├── home_page.dart
+│   └── surah_page.dart
+└── widgets/
+    └── surah_card.dart
+
+pubspec.yaml
+```
+
+## 1. pubspec.yaml
+```yaml
+name: quran_app
+description: A Flutter Quran application with audio playback and navigation features.
+
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  
+  # Audio player
+  audioplayers: ^5.0.0
+  
+  # HTTP requests
+  http: ^1.1.0
+  
+  # Quran package
+  quran: ^1.2.0
+  
+  # Shared preferences for settings
+  shared_preferences: ^2.2.0
+  
+  # Visibility detector
+  visibility_detector: ^0.4.0+2
+  
+  # Material icons
+  cupertino_icons: ^1.0.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^2.0.0
+
+flutter:
+  uses-material-design: true
+```
+
+## 2. lib/models/surah_info.dart
+```dart
+class SurahInfo {
+  final int number;
+  final String name;
+  final String englishName;
+  final String englishNameTranslation;
+  final int numberOfAyahs;
+  final String revelationType;
+
+  SurahInfo({
+    required this.number,
+    required this.name,
+    required this.englishName,
+    required this.englishNameTranslation,
+    required this.numberOfAyahs,
+    required this.revelationType,
+  });
+
+  factory SurahInfo.fromJson(Map<String, dynamic> json) {
+    return SurahInfo(
+      number: json['number'] ?? 0,
+      name: json['name'] ?? '',
+      englishName: json['englishName'] ?? '',
+      englishNameTranslation: json['englishNameTranslation'] ?? '',
+      numberOfAyahs: json['numberOfAyahs'] ?? 0,
+      revelationType: json['revelationType'] ?? 'Meccan',
+    );
+  }
+
+  Map<String, dynamic> toJson() {
+    return {
+      'number': number,
+      'name': name,
+      'englishName': englishName,
+      'englishNameTranslation': englishNameTranslation,
+      'numberOfAyahs': numberOfAyahs,
+      'revelationType': revelationType,
+    };
+  }
+}
+```
+
+## 3. lib/main.dart
+```dart
+import 'package:flutter/material.dart';
+import 'pages/home_page.dart';
+
+void main() {
+  runApp(QuranApp());
+}
+
+class QuranApp extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'Quran App',
+      theme: ThemeData(
+        primarySwatch: Colors.green,
+        fontFamily: 'Arial',
+        appBarTheme: AppBarTheme(
+          backgroundColor: Colors.green[700],
+          foregroundColor: Colors.white,
+          elevation: 0,
+        ),
+        elevatedButtonTheme: ElevatedButtonThemeData(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: Colors.green[700],
+            foregroundColor: Colors.white,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+          ),
+        ),
+      ),
+      home: HomePage(),
+      debugShowCheckedModeBanner: false,
+    );
+  }
+}
+```
+
+## 4. lib/widgets/surah_card.dart
+```dart
+import 'package:flutter/material.dart';
+import '../models/surah_info.dart';
+
+class SurahCard extends StatelessWidget {
+  final SurahInfo surahInfo;
+  final VoidCallback onTap;
+
+  const SurahCard({
+    Key? key,
+    required this.surahInfo,
+    required this.onTap,
+  }) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      elevation: 4,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          padding: EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            gradient: LinearGradient(
+              colors: [Colors.green[50]!, Colors.white],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+          ),
+          child: Row(
+            children: [
+              // Surah number circle
+              Container(
+                width: 45,
+                height: 45,
+                decoration: BoxDecoration(
+                  color: Colors.green[700],
+                  shape: BoxShape.circle,
+                ),
+                child: Center(
+                  child: Text(
+                    '${surahInfo.number}',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ),
+              ),
+              SizedBox(width: 16),
+              
+              // Surah info
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      surahInfo.name,
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.black87,
+                      ),
+                    ),
+                    SizedBox(height: 4),
+                    Text(
+                      surahInfo.englishName,
+                      style: TextStyle(
+                        fontSize: 14,
+                        color: Colors.grey[600],
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                    SizedBox(height: 2),
+                    Text(
+                      '${surahInfo.englishNameTranslation} • ${surahInfo.revelationType}',
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey[500],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              
+              // Ayah count and arrow
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Container(
+                    padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: Colors.green[100],
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Text(
+                      '${surahInfo.numberOfAyahs} verses',
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: Colors.green[700],
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                  SizedBox(height: 8),
+                  Icon(
+                    Icons.arrow_forward_ios,
+                    color: Colors.grey[400],
+                    size: 16,
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+```
+
+## 5. lib/pages/home_page.dart
+```dart
+import 'package:flutter/material.dart';
+import 'package:quran/quran.dart' as quran;
+import '../models/surah_info.dart';
+import '../widgets/surah_card.dart';
+import 'surah_page.dart';
+
+class HomePage extends StatefulWidget {
+  @override
+  _HomePageState createState() => _HomePageState();
+}
+
+class _HomePageState extends State<HomePage> {
+  List<SurahInfo> surahs = [];
+  List<SurahInfo> filteredSurahs = [];
+  TextEditingController searchController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSurahs();
+    searchController.addListener(_filterSurahs);
+  }
+
+  @override
+  void dispose() {
+    searchController.dispose();
+    super.dispose();
+  }
+
+  void _loadSurahs() {
+    surahs = List.generate(114, (index) {
+      int surahNumber = index + 1;
+      return SurahInfo(
+        number: surahNumber,
+        name: quran.getSurahName(surahNumber),
+        englishName: quran.getSurahNameEnglish(surahNumber),
+        englishNameTranslation: quran.getSurahNameEnglish(surahNumber),
+        numberOfAyahs: quran.getVerseCount(surahNumber),
+        revelationType: _getRevelationType(surahNumber),
+      );
+    });
+    filteredSurahs = surahs;
+    setState(() {});
+  }
+
+  String _getRevelationType(int surahNumber) {
+    // Meccan surahs (based on traditional order)
+    List<int> meccanSurahs = [
+      1, 6, 7, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 23, 25, 26, 27, 28, 29, 30, 31, 32, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 50, 51, 52, 53, 54, 55, 56, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97, 100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 111, 112, 113, 114
+    ];
+    return meccanSurahs.contains(surahNumber) ? "Meccan" : "Medinan";
+  }
+
+  void _filterSurahs() {
+    String query = searchController.text.toLowerCase();
+    setState(() {
+      filteredSurahs = surahs.where((surah) {
+        return surah.name.toLowerCase().contains(query) ||
+               surah.englishName.toLowerCase().contains(query) ||
+               surah.englishNameTranslation.toLowerCase().contains(query) ||
+               surah.number.toString().contains(query);
+      }).toList();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(
+          'Holy Quran',
+          style: TextStyle(
+            fontSize: 24,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        centerTitle: true,
+        elevation: 0,
+        flexibleSpace: Container(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [Colors.green[700]!, Colors.green[500]!],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
+          ),
+        ),
+      ),
+      body: Column(
+        children: [
+          // Search bar
+          Container(
+            margin: EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.circular(15),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.1),
+                  blurRadius: 10,
+                  offset: Offset(0, 2),
+                ),
+              ],
+            ),
+            child: TextField(
+              controller: searchController,
+              decoration: InputDecoration(
+                hintText: 'Search surahs...',
+                prefixIcon: Icon(Icons.search, color: Colors.green[700]),
+                suffixIcon: searchController.text.isNotEmpty
+                    ? IconButton(
+                        icon: Icon(Icons.clear, color: Colors.grey),
+                        onPressed: () {
+                          searchController.clear();
+                        },
+                      )
+                    : null,
+                border: InputBorder.none,
+                contentPadding: EdgeInsets.symmetric(horizontal: 20, vertical: 15),
+              ),
+              onChanged: (value) {
+                setState(() {});
+              },
+            ),
+          ),
+
+          // Statistics card
+          Container(
+            margin: EdgeInsets.symmetric(horizontal: 16),
+            padding: EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [Colors.green[600]!, Colors.green[400]!],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(15),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.green.withOpacity(0.3),
+                  blurRadius: 10,
+                  offset: Offset(0, 4),
+                ),
+              ],
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: [
+                _buildStatItem('Surahs', '114'),
+                Container(width: 1, height: 40, color: Colors.white.withOpacity(0.3)),
+                _buildStatItem('Verses', '6,236'),
+                Container(width: 1, height: 40, color: Colors.white.withOpacity(0.3)),
+                _buildStatItem('Words', '77,449'),
+              ],
+            ),
+          ),
+
+          SizedBox(height: 16),
+
+          // Surahs list
+          Expanded(
+            child: filteredSurahs.isEmpty
+                ? Center(
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          Icons.search_off,
+                          size: 64,
+                          color: Colors.grey[400],
+                        ),
+                        SizedBox(height: 16),
+                        Text(
+                          'No surahs found',
+                          style: TextStyle(
+                            fontSize: 18,
+                            color: Colors.grey[600],
+                            fontWeight: FontWeight.w500,
+                          ),
+                        ),
+                        SizedBox(height: 8),
+                        Text(
+                          'Try searching with different keywords',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: Colors.grey[500],
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
+                : ListView.builder(
+                    itemCount: filteredSurahs.length,
+                    itemBuilder: (context, index) {
+                      SurahInfo surah = filteredSurahs[index];
+                      return SurahCard(
+                        surahInfo: surah,
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => SurahPage(surahInfo: surah),
+                            ),
+                          );
+                        },
+                      );
+                    },
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStatItem(String label, String value) {
+    return Column(
+      children: [
+        Text(
+          value,
+          style: TextStyle(
+            color: Colors.white,
+            fontSize: 24,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        SizedBox(height: 4),
+        Text(
+          label,
+          style: TextStyle(
+            color: Colors.white.withOpacity(0.9),
+            fontSize: 14,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      ],
+    );
+  }
+}
+```
+
+## 6. lib/pages/surah_page.dart
+```dart
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter/gestures.dart';
+import 'package:audioplayers/audioplayers.dart';
+import 'package:http/http.dart' as http;
+import 'package:quran/quran.dart' as quran;
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:visibility_detector/visibility_detector.dart';
+import '../models/surah_info.dart';
+
+class SurahPage extends StatefulWidget {
+  final SurahInfo surahInfo;
+
+  const SurahPage({Key? key, required this.surahInfo}) : super(key: key);
+
+  @override
+  _SurahPageState createState() => _SurahPageState();
+}
+
+class _SurahPageState extends State<SurahPage> with TickerProviderStateMixin {
+  late AudioPlayer audioPlayer;
+  int? selectedAyah;
+  int? playingAyah;
+  bool isPlaying = false;
+  bool isLoading = false;
+  bool isPaused = false;
+  Duration duration = Duration.zero;
+  Duration position = Duration.zero;
+  double fontSize = 22.0;
+  late AnimationController _animationController;
+  late Animation<double> _fadeAnimation;
+  late AnimationController _pulseController;
+  late Animation<double> _pulseAnimation;
+
+  // Audio settings
+  List<String> reciters = [
+    'Alafasy_128kbps',
+    'Abdul_Basit_Murattal_192kbps',
+    'Husary_128kbps',
+    'Minshawi_Murattal_128kbps',
+    'Sudais_192kbps',
+  ];
+  
+  List<String> reciterNames = [
+    'Mishary Rashid Alafasy',
+    'Abdul Basit Abdul Samad',
+    'Mahmoud Khalil Al-Husary',
+    'Mohamed Siddiq El-Minshawi',
+    'Abdul Rahman Al-Sudais',
+  ];
+  
+  int selectedReciter = 0;
+  
+  // New variables for enhanced audio features
+  bool isPlayingFullSurah = false;
+  bool isRepeating = false;
+  bool isRepeatingSurah = false;
+  int currentPlayingIndex = 0;
+  List<int> playQueue = [];
+  
+  // PageView controller
+  late PageController pageController;
+
+  @override
+  void initState() {
+    super.initState();
+    audioPlayer = AudioPlayer();
+    _setupAudioPlayer();
+    
+    // Initialize PageController
+    pageController = PageController(initialPage: widget.surahInfo.number - 1);
+    
+    _animationController = AnimationController(
+      duration: Duration(milliseconds: 300),
+      vsync: this,
+    );
+    
+    _fadeAnimation = Tween<double>(
+      begin: 0.0,
+      end: 1.0,
+    ).animate(CurvedAnimation(
+      parent: _animationController,
+      curve: Curves.easeInOut,
+    ));
+
+    _pulseController = AnimationController(
+      duration: Duration(milliseconds: 1000),
+      vsync: this,
+    );
+    
+    _pulseAnimation = Tween<double>(
+      begin: 1.0,
+      end: 1.1,
+    ).animate(CurvedAnimation(
+      parent: _pulseController,
+      curve: Curves.easeInOut,
+    ));
+
+    _loadSettings();
+  }
+
+  void _setupAudioPlayer() {
+    audioPlayer.onDurationChanged.listen((Duration d) {
+      setState(() {
+        duration = d;
+      });
+    });
+
+    audioPlayer.onPositionChanged.listen((Duration p) {
+      setState(() {
+        position = p;
+      });
+    });
+
+    audioPlayer.onPlayerStateChanged.listen((PlayerState state) {
+      setState(() {
+        isPlaying = state == PlayerState.playing;
+        isPaused = state == PlayerState.paused;
+        if (state == PlayerState.completed) {
+          // Move to next ayah in queue
+          if (isRepeating && !isPlayingFullSurah) {
+            // Repeat the same ayah
+            _playFromQueue();
+          } else if (isPlayingFullSurah || currentPlayingIndex < playQueue.length - 1) {
+            currentPlayingIndex++;
+            _playFromQueue();
+          } else {
+            playingAyah = null;
+            isPlaying = false;
+            isPaused = false;
+            isPlayingFullSurah = false;
+            _pulseController.stop();
+          }
+        }
+      });
+
+      if (state == PlayerState.playing) {
+        _pulseController.repeat(reverse: true);
+      } else {
+        _pulseController.stop();
+      }
+    });
+  }
+
+  Future<void> _loadSettings() async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    setState(() {
+      fontSize = prefs.getDouble('fontSize') ?? 22.0;
+      selectedReciter = prefs.getInt('selectedReciter') ?? 0;
+    });
+  }
+
+  Future<void> _saveSettings() async {
+    SharedPreferences prefs = await SharedPreferences.getInstance();
+    await prefs.setDouble('fontSize', fontSize);
+    await prefs.setInt('selectedReciter', selectedReciter);
+  }
+
+  String getAudioUrl(int surahNumber, int ayahNumber) {
+    return 'https://cdn.islamic.network/quran/audio-surah/128/${reciters[selectedReciter]}/$surahNumber.mp3';
+  }
+
+  Future<void> playAyah(int ayahNumber, {bool isFullSurah = false}) async {
+    if (!isFullSurah && playingAyah == ayahNumber) {
+      if (isPlaying) {
+        await audioPlayer.pause();
+      } else {
+        await audioPlayer.resume();
+      }
+      return;
+    }
+
+    setState(() {
+      isLoading = true;
+      isPlayingFullSurah = isFullSurah;
+    });
+
+    if (isFullSurah) {
+      // Setup queue for full surah
+      playQueue = List.generate(widget.surahInfo.numberOfAyahs, (index) => index + 1);
+      currentPlayingIndex = ayahNumber - 1;
+    } else {
+      playQueue = [ayahNumber];
+      currentPlayingIndex = 0;
+    }
+
+    await _playFromQueue();
+  }
+
+  Future<void> _playFromQueue() async {
+    if (currentPlayingIndex >= playQueue.length) {
+      if (isRepeatingSurah && isPlayingFullSurah) {
+        currentPlayingIndex = 0;
+      } else if (isRepeating && !isPlayingFullSurah) {
+        // Keep playing the same ayah
+      } else {
+        await stopAudio();
+        return;
+      }
+    }
+
+    int ayahNumber = playQueue[currentPlayingIndex];
+
+    try {
+      String audioUrl = getAudioUrl(widget.surahInfo.number, ayahNumber);
+      
+      final response = await http.head(Uri.parse(audioUrl));
+      
+      if (response.statusCode == 200) {
+        await audioPlayer.play(UrlSource(audioUrl));
+        setState(() {
+          playingAyah = ayahNumber;
+        });
+      } else {
+        throw Exception('Audio not found');
+      }
+    } catch (e) {
+      _showErrorSnackBar('Unable to load audio. Please check your internet connection.');
+      await stopAudio();
+    } finally {
+      setState(() {
+        isLoading = false;
+      });
+    }
+  }
+
+  Future<void> stopAudio() async {
+    await audioPlayer.stop();
+    setState(() {
+      playingAyah = null;
+      isPlaying = false;
+      isPaused = false;
+      isPlayingFullSurah = false;
+      isRepeating = false;
+      isRepeatingSurah = false;
+      position = Duration.zero;
+      playQueue.clear();
+      currentPlayingIndex = 0;
+    });
+    _pulseController.stop();
+  }
+
+  void _showAyahOptions(int ayahNumber) {
+    setState(() {
+      selectedAyah = ayahNumber;
+    });
+    _animationController.forward();
+  }
+
+  void _hideAyahOptions() {
+    _animationController.reverse().then((_) {
+      setState(() {
+        selectedAyah = null;
+      });
+    });
+  }
+
+  void _showSettingsDialog() {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              title: Text('Settings'),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  // Font size slider
+                  Text('Font Size: ${fontSize.round()}'),
+                  Slider(
+                    value: fontSize,
+                    min: 16.0,
+                    max: 32.0,
+                    divisions: 16,
+                    activeColor: Colors.green[700],
+                    onChanged: (value) {
+                      setDialogState(() {
+                        fontSize = value;
+                      });
+                      setState(() {});
+                    },
+                  ),
+                  SizedBox(height: 20),
+                  
+                  // Reciter selection
+                  Text('Select Reciter:'),
+                  SizedBox(height: 10),
+                  DropdownButton<int>(
+                    value: selectedReciter,
+                    isExpanded: true,
+                    items: reciterNames.map((String name) {
+                      int index = reciterNames.indexOf(name);
+                      return DropdownMenuItem<int>(
+                        value: index,
+                        child: Text(name),
+                      );
+                    }).toList(),
+                    onChanged: (int? value) {
+                      if (value != null) {
+                        setDialogState(() {
+                          selectedReciter = value;
+                        });
+                        setState(() {});
+                      }
+                    },
+                  ),
+                ],
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    Navigator.of(context).pop();
+                  },
+                  child: Text('Cancel'),
+                ),
+                ElevatedButton(
+                  onPressed: () {
+                    _saveSettings();
+                    Navigator.of(context).pop();
+                  },
+                  child: Text('Save'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _showErrorSnackBar(String message) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.red[700],
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      ),
+    );
+  }
+
+  String _formatDuration(Duration duration) {
+    String twoDigits(int n) => n.toString().padLeft(2, "0");
+    String twoDigitMinutes = twoDigits(duration.inMinutes.remainder(60));
+    String twoDigitSeconds = twoDigits(duration.inSeconds.remainder(60));
+    return "$twoDigitMinutes:$twoDigitSeconds";
+  }
+
+  Widget _buildControlButton({
+    required IconData icon,
+    required String label,
+    required VoidCallback? onPressed,
+    bool isPrimary = false,
+  }) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Container(
+          decoration: BoxDecoration(
+            color: isPrimary ? Colors.green[700] : Colors.grey[100],
+            shape: BoxShape.circle,
+          ),
+          child: IconButton(
+            icon: Icon(
+              icon,
+              color: isPrimary ? Colors.white : Colors.grey[700],
+            ),
+            onPressed: onPressed,
+          ),
+        ),
+        SizedBox(height: 4),
+        Text(
+          label,
+          style: TextStyle(
+            fontSize: 12,
+            color: Colors.grey[600],
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      ],
+    );
+  }
+
+  String _getRevelationType(int surahNumber) {
+    // Meccan surahs (based on traditional order)
+    List<int> meccanSurahs = [
+      1, 6, 7, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 23, 25, 26, 27, 28, 29, 30, 31, 32, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 50, 51, 52, 53, 54, 55, 56, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97, 100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 111, 112, 113, 114
+    ];
+    return meccanSurahs.contains(surahNumber) ? "Meccan" : "Medinan";
+  }
+
+  @override
+  void dispose() {
+    audioPlayer.dispose();
+    _animationController.dispose();
+    _pulseController.dispose();
+    pageController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              widget.surahInfo.name,
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            Text(
+              widget.surahInfo.englishName,
+              style: TextStyle(fontSize: 12, fontWeight: FontWeight.normal),
+            ),
+          ],
+        ),
+        actions: [
+          // Play full surah button
+          IconButton(
+            icon: Icon(isPlayingFullSurah ? Icons.pause : Icons.play_circle_filled),
+            onPressed: () {
+              if (isPlayingFullSurah) {
+                if (isPlaying) {
+                  audioPlayer.pause();
+                } else {
+                  audioPlayer.resume();
+                }
+              } else {
+                playAyah(1, isFullSurah: true);
+              }
+            },
+            tooltip: isPlayingFullSurah ? 'Pause Surah' : 'Play Full Surah',
+          ),
+          
+          // Repeat button
+          IconButton(
+            icon: Icon(
+              isRepeatingSurah ? Icons.repeat : Icons.repeat_outlined,
+              color: isRepeatingSurah ? Colors.green[700] : null,
+            ),
+            onPressed: () {
+              setState(() {
+                isRepeatingSurah = !isRepeatingSurah;
+              });
+            },
+            tooltip: 'Repeat Surah',
+          ),
+          
+          IconButton(
+            icon: Icon(Icons.settings),
+            onPressed: _showSettingsDialog,
+            tooltip: 'Settings',
+          ),
+          if (isPlaying || isPaused)
+            IconButton(
+              icon: Icon(Icons.stop),
+              onPressed: stopAudio,
+              tooltip: 'Stop Audio',
+            ),
+        ],
+      ),
+      body: PageView.builder(
+        controller: pageController,
+        itemCount: 114, // Total number of surahs
+        onPageChanged: (int page) {
+          // Stop current audio when changing page
+          if (isPlaying || isPaused) {
+            stopAudio();
+          }
+          // Update the current surah info if needed
+        },
+        itemBuilder: (context, pageIndex) {
+          int currentSurahNumber = pageIndex + 1;
+          
+          // Get current surah info
+          SurahInfo currentSurah = SurahInfo(
+            number: currentSurahNumber,
+            name: quran.getSurahName(currentSurahNumber),
+            englishName: quran.getSurahNameEnglish(currentSurahNumber),
+            englishNameTranslation: quran.getSurahNameEnglish(currentSurahNumber),
+            numberOfAyahs: quran.getVerseCount(currentSurahNumber),
+            revelationType: _getRevelationType(currentSurahNumber),
+          );
+          
+          return Stack(
+            children: [
+              // Main content
+              CustomScrollView(
+                slivers: [
+                  // Surah header
+                  SliverToBoxAdapter(
+                    child: Container(
+                      margin: EdgeInsets.all(16),
+                      padding: EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        gradient: LinearGradient(
+                          colors: [Colors.green[700]!, Colors.green[500]!],
+                          begin: Alignment.topLeft,
+                          end: Alignment.bottomRight,
+                        ),
+                        borderRadius: BorderRadius.circular(15),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.green.withOpacity(0.3),
+                            blurRadius: 10,
+                            offset: Offset(0, 4),
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        children: [
+                          Text(
+                            currentSurah.name,
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 28,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          SizedBox(height: 8),
+                          Text(
+                            '${currentSurah.englishNameTranslation} • ${currentSurah.revelationType}',
+                            style: TextStyle(
+                              color: Colors.white70,
+                              fontSize: 16,
+                            ),
+                          ),
+                          SizedBox(height: 4),
+                          Text(
+                            '${currentSurah.numberOfAyahs} verses',
+                            style: TextStyle(
+                              color: Colors.white70,
+                              fontSize: 14,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+
+                  // Bismillah (except for Surah At-Tawba)
+                  if (currentSurahNumber != 9 && currentSurahNumber != 1)
+                    SliverToBoxAdapter(
+                      child: Container(
+                        margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        padding: EdgeInsets.all(20),
+                        decoration: BoxDecoration(
+                          color: Colors.grey[50],
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.grey[300]!),
+                        ),
+                        child: Text(
+                          'بِسۡمِ ٱللَّهِ ٱلرَّحۡمَٰنِ ٱلرَّحِيمِ',
+                          style: TextStyle(
+                            fontSize: fontSize + 2,
+                            height: 2.0,
+                            fontWeight: FontWeight.w500,
+                          ),
+                          textAlign: TextAlign.center,
+                          textDirection: TextDirection.rtl,
+                        ),
+                      ),
+                    ),
+
+                  // All Ayahs together
+                  SliverToBoxAdapter(
+                    child: VisibilityDetector(
+                      key: Key('surah_${currentSurahNumber}'),
+                      onVisibilityChanged: (visibilityInfo) {
+                        if (visibilityInfo.visibleFraction > 0.5) {
+                          print('Surah ${currentSurahNumber} is visible');
+                        }
+                      },
+                      child: Container(
+                        margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                        padding: EdgeInsets.all(24),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.grey[300]!, width: 1),
