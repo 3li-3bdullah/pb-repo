@@ -1095,3 +1095,758 @@ class _SurahPageState extends State<SurahPage> with TickerProviderStateMixin {
                           color: Colors.white,
                           borderRadius: BorderRadius.circular(12),
                           border: Border.all(color: Colors.grey[300]!, width: 1),
+boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.05),
+                              blurRadius: 10,
+                              offset: Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: RichText(
+                          textAlign: TextAlign.justify,
+                          textDirection: TextDirection.rtl,
+                          text: TextSpan(
+                            children: _buildAyahSpans(currentSurah),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+
+                  // Audio progress bar
+                  if (playingAyah != null)
+                    SliverToBoxAdapter(
+                      child: Container(
+                        margin: EdgeInsets.all(16),
+                        padding: EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: Colors.white,
+                          borderRadius: BorderRadius.circular(12),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.1),
+                              blurRadius: 10,
+                              offset: Offset(0, 2),
+                            ),
+                          ],
+                        ),
+                        child: Column(
+                          children: [
+                            Text(
+                              'Playing Ayah ${playingAyah}',
+                              style: TextStyle(
+                                fontSize: 16,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.green[700],
+                              ),
+                            ),
+                            SizedBox(height: 12),
+                            SliderTheme(
+                              data: SliderTheme.of(context).copyWith(
+                                activeTrackColor: Colors.green[700],
+                                inactiveTrackColor: Colors.grey[300],
+                                thumbColor: Colors.green[700],
+                                overlayColor: Colors.green.withOpacity(0.2),
+                                thumbShape: RoundSliderThumbShape(enabledThumbRadius: 8),
+                                overlayShape: RoundSliderOverlayShape(overlayRadius: 16),
+                              ),
+                              child: Slider(
+                                value: position.inSeconds.toDouble(),
+                                max: duration.inSeconds.toDouble(),
+                                onChanged: (value) async {
+                                  await audioPlayer.seek(Duration(seconds: value.toInt()));
+                                },
+                              ),
+                            ),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                              children: [
+                                Text(
+                                  _formatDuration(position),
+                                  style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                                ),
+                                Text(
+                                  _formatDuration(duration),
+                                  style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                                ),
+                              ],
+                            ),
+                            SizedBox(height: 16),
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                              children: [
+                                _buildControlButton(
+                                  icon: isRepeating ? Icons.repeat_one : Icons.repeat_one_outlined,
+                                  label: 'Repeat',
+                                  onPressed: () {
+                                    setState(() {
+                                      isRepeating = !isRepeating;
+                                    });
+                                  },
+                                ),
+                                _buildControlButton(
+                                  icon: Icons.skip_previous,
+                                  label: 'Previous',
+                                  onPressed: currentPlayingIndex > 0 ? () {
+                                    setState(() {
+                                      currentPlayingIndex--;
+                                    });
+                                    _playFromQueue();
+                                  } : null,
+                                ),
+                                _buildControlButton(
+                                  icon: isPlaying ? Icons.pause : Icons.play_arrow,
+                                  label: isPlaying ? 'Pause' : 'Play',
+                                  onPressed: () {
+                                    if (isPlaying) {
+                                      audioPlayer.pause();
+                                    } else {
+                                      audioPlayer.resume();
+                                    }
+                                  },
+                                  isPrimary: true,
+                                ),
+                                _buildControlButton(
+                                  icon: Icons.skip_next,
+                                  label: 'Next',
+                                  onPressed: currentPlayingIndex < playQueue.length - 1 ? () {
+                                    setState(() {
+                                      currentPlayingIndex++;
+                                    });
+                                    _playFromQueue();
+                                  } : null,
+                                ),
+                                _buildControlButton(
+                                  icon: Icons.stop,
+                                  label: 'Stop',
+                                  onPressed: stopAudio,
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+
+                  // Bottom padding
+                  SliverToBoxAdapter(
+                    child: SizedBox(height: 80),
+                  ),
+                ],
+              ),
+
+              // Selected ayah overlay
+              if (selectedAyah != null)
+                AnimatedBuilder(
+                  animation: _fadeAnimation,
+                  builder: (context, child) {
+                    return Opacity(
+                      opacity: _fadeAnimation.value,
+                      child: Container(
+                        color: Colors.black.withOpacity(0.5),
+                        child: Center(
+                          child: Container(
+                            margin: EdgeInsets.all(20),
+                            padding: EdgeInsets.all(20),
+                            decoration: BoxDecoration(
+                              color: Colors.white,
+                              borderRadius: BorderRadius.circular(15),
+                            ),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Text(
+                                  'Ayah ${selectedAyah}',
+                                  style: TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.green[700],
+                                  ),
+                                ),
+                                SizedBox(height: 20),
+                                Container(
+                                  padding: EdgeInsets.all(16),
+                                  decoration: BoxDecoration(
+                                    color: Colors.grey[50],
+                                    borderRadius: BorderRadius.circular(10),
+                                  ),
+                                  child: Text(
+                                    quran.getVerse(currentSurahNumber, selectedAyah!),
+                                    style: TextStyle(
+                                      fontSize: fontSize,
+                                      height: 2.0,
+                                    ),
+                                    textAlign: TextAlign.center,
+                                    textDirection: TextDirection.rtl,
+                                  ),
+                                ),
+                                SizedBox(height: 20),
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                                  children: [
+                                    ElevatedButton.icon(
+                                      onPressed: () {
+                                        playAyah(selectedAyah!);
+                                        _hideAyahOptions();
+                                      },
+                                      icon: Icon(Icons.play_arrow),
+                                      label: Text('Play'),
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: Colors.green[700],
+                                        foregroundColor: Colors.white,
+                                      ),
+                                    ),
+                                    ElevatedButton.icon(
+                                      onPressed: () {
+                                        Clipboard.setData(ClipboardData(
+                                          text: quran.getVerse(currentSurahNumber, selectedAyah!),
+                                        ));
+                                        _hideAyahOptions();
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          SnackBar(
+                                            content: Text('Ayah copied to clipboard'),
+                                            backgroundColor: Colors.green[700],
+                                            behavior: SnackBarBehavior.floating,
+                                            shape: RoundedRectangleBorder(
+                                              borderRadius: BorderRadius.circular(10),
+                                            ),
+                                          ),
+                                        );
+                                      },
+                                      icon: Icon(Icons.copy),
+                                      label: Text('Copy'),
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: Colors.blue[700],
+                                        foregroundColor: Colors.white,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                SizedBox(height: 12),
+                                TextButton(
+                                  onPressed: _hideAyahOptions,
+                                  child: Text('Close'),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    );
+                  },
+                ),
+            ],
+          );
+        },
+      ),
+
+      // Floating action button for quick access
+      floatingActionButton: Column(
+        mainAxisAlignment: MainAxisAlignment.end,
+        children: [
+          if (isLoading)
+            Container(
+              margin: EdgeInsets.only(bottom: 16),
+              child: CircularProgressIndicator(
+                valueColor: AlwaysStoppedAnimation<Color>(Colors.green[700]!),
+              ),
+            ),
+          
+          // Audio control FAB
+          if (playingAyah != null)
+            AnimatedBuilder(
+              animation: _pulseAnimation,
+              builder: (context, child) {
+                return Transform.scale(
+                  scale: _pulseAnimation.value,
+                  child: FloatingActionButton(
+                    heroTag: "audio_control",
+                    onPressed: () {
+                      if (isPlaying) {
+                        audioPlayer.pause();
+                      } else {
+                        audioPlayer.resume();
+                      }
+                    },
+                    backgroundColor: Colors.green[700],
+                    child: Icon(
+                      isPlaying ? Icons.pause : Icons.play_arrow,
+                      color: Colors.white,
+                    ),
+                  ),
+                );
+              },
+            ),
+        ],
+      ),
+    );
+  }
+
+  List<TextSpan> _buildAyahSpans(SurahInfo surah) {
+    List<TextSpan> spans = [];
+    
+    for (int i = 1; i <= surah.numberOfAyahs; i++) {
+      String ayahText = quran.getVerse(surah.number, i);
+      
+      // Add ayah text
+      spans.add(
+        TextSpan(
+          text: ayahText,
+          style: TextStyle(
+            fontSize: fontSize,
+            height: 2.0,
+            color: playingAyah == i ? Colors.green[700] : Colors.black87,
+            fontWeight: playingAyah == i ? FontWeight.bold : FontWeight.normal,
+          ),
+          recognizer: TapGestureRecognizer()
+            ..onTap = () {
+              HapticFeedback.lightImpact();
+              _showAyahOptions(i);
+            },
+        ),
+      );
+      
+      // Add ayah number
+      spans.add(
+        TextSpan(
+          text: ' ﴿${_getArabicNumber(i)}﴾ ',
+          style: TextStyle(
+            fontSize: fontSize - 2,
+            color: Colors.green[700],
+            fontWeight: FontWeight.bold,
+          ),
+          recognizer: TapGestureRecognizer()
+            ..onTap = () {
+              HapticFeedback.lightImpact();
+              playAyah(i);
+            },
+        ),
+      );
+    }
+    
+    return spans;
+  }
+
+  String _getArabicNumber(int number) {
+    Map<String, String> arabicNumbers = {
+      '0': '٠', '1': '١', '2': '٢', '3': '٣', '4': '٤',
+      '5': '٥', '6': '٦', '7': '٧', '8': '٨', '9': '٩'
+    };
+    
+    String result = '';
+    String numberStr = number.toString();
+    
+    for (int i = 0; i < numberStr.length; i++) {
+      result += arabicNumbers[numberStr[i]] ?? numberStr[i];
+    }
+    
+    return result;
+  }
+}
+
+// Additional utility class for better state management
+class AudioSettings {
+  final double fontSize;
+  final int selectedReciter;
+  final bool isRepeating;
+  final bool isRepeatingSurah;
+  
+  AudioSettings({
+    this.fontSize = 22.0,
+    this.selectedReciter = 0,
+    this.isRepeating = false,
+    this.isRepeatingSurah = false,
+  });
+  
+  AudioSettings copyWith({
+    double? fontSize,
+    int? selectedReciter,
+    bool? isRepeating,
+    bool? isRepeatingSurah,
+  }) {
+    return AudioSettings(
+      fontSize: fontSize ?? this.fontSize,
+      selectedReciter: selectedReciter ?? this.selectedReciter,
+      isRepeating: isRepeating ?? this.isRepeating,
+      isRepeatingSurah: isRepeatingSurah ?? this.isRepeatingSurah,
+    );
+  }
+}
+
+// Enhanced error handling
+class QuranAudioException implements Exception {
+  final String message;
+  final String? details;
+  
+  QuranAudioException(this.message, [this.details]);
+  
+  @override
+  String toString() {
+    return details != null ? '$message: $details' : message;
+  }
+}
+
+// Audio player service for better separation of concerns
+class AudioPlayerService {
+  static final AudioPlayerService _instance = AudioPlayerService._internal();
+  factory AudioPlayerService() => _instance;
+  AudioPlayerService._internal();
+  
+  late AudioPlayer _audioPlayer;
+  
+  void initialize() {
+    _audioPlayer = AudioPlayer();
+  }
+  
+  AudioPlayer get player => _audioPlayer;
+  
+  void dispose() {
+    _audioPlayer.dispose();
+  }
+  
+  Future<bool> checkInternetConnection() async {
+    try {
+      final response = await http.get(Uri.parse('https://www.google.com'));
+      return response.statusCode == 200;
+    } catch (e) {
+      return false;
+    }
+  }
+}
+
+// Bookmark model for future implementation
+class Bookmark {
+  final int surahNumber;
+  final int ayahNumber;
+  final String surahName;
+  final DateTime createdAt;
+  final String? note;
+  
+  Bookmark({
+    required this.surahNumber,
+    required this.ayahNumber,
+    required this.surahName,
+    required this.createdAt,
+    this.note,
+  });
+  
+  Map<String, dynamic> toJson() {
+    return {
+      'surahNumber': surahNumber,
+      'ayahNumber': ayahNumber,
+      'surahName': surahName,
+      'createdAt': createdAt.toIso8601String(),
+      'note': note,
+    };
+  }
+  
+  factory Bookmark.fromJson(Map<String, dynamic> json) {
+    return Bookmark(
+      surahNumber: json['surahNumber'],
+      ayahNumber: json['ayahNumber'],
+      surahName: json['surahName'],
+      createdAt: DateTime.parse(json['createdAt']),
+      note: json['note'],
+    );
+  }
+}
+
+// Reading progress model
+class ReadingProgress {
+  final int surahNumber;
+  final int lastReadAyah;
+  final DateTime lastReadAt;
+  final int totalTimeSpent; // in seconds
+  
+  ReadingProgress({
+    required this.surahNumber,
+    required this.lastReadAyah,
+    required this.lastReadAt,
+    required this.totalTimeSpent,
+  });
+  
+  Map<String, dynamic> toJson() {
+    return {
+      'surahNumber': surahNumber,
+      'lastReadAyah': lastReadAyah,
+      'lastReadAt': lastReadAt.toIso8601String(),
+      'totalTimeSpent': totalTimeSpent,
+    };
+  }
+  
+  factory ReadingProgress.fromJson(Map<String, dynamic> json) {
+    return ReadingProgress(
+      surahNumber: json['surahNumber'],
+      lastReadAyah: json['lastReadAyah'],
+      lastReadAt: DateTime.parse(json['lastReadAt']),
+      totalTimeSpent: json['totalTimeSpent'],
+    );
+  }
+}
+
+// Enhanced search functionality
+class QuranSearch {
+  static List<SearchResult> searchInQuran(String query) {
+    List<SearchResult> results = [];
+    query = query.toLowerCase().trim();
+    
+    if (query.isEmpty) return results;
+    
+    for (int surah = 1; surah <= 114; surah++) {
+      int ayahCount = quran.getVerseCount(surah);
+      
+      for (int ayah = 1; ayah <= ayahCount; ayah++) {
+        String ayahText = quran.getVerse(surah, ayah).toLowerCase();
+        
+        if (ayahText.contains(query)) {
+          results.add(SearchResult(
+            surahNumber: surah,
+            ayahNumber: ayah,
+            surahName: quran.getSurahName(surah),
+            ayahText: quran.getVerse(surah, ayah),
+            matchIndex: ayahText.indexOf(query),
+          ));
+        }
+      }
+    }
+    
+    return results;
+  }
+}
+
+class SearchResult {
+  final int surahNumber;
+  final int ayahNumber;
+  final String surahName;
+  final String ayahText;
+  final int matchIndex;
+  
+  SearchResult({
+    required this.surahNumber,
+    required this.ayahNumber,
+    required this.surahName,
+    required this.ayahText,
+    required this.matchIndex,
+  });
+}
+
+// Theme configuration
+class QuranTheme {
+  static const Color primaryGreen = Color(0xFF2E7D32);
+  static const Color lightGreen = Color(0xFF4CAF50);
+  static const Color darkGreen = Color(0xFF1B5E20);
+  
+  static ThemeData get lightTheme {
+    return ThemeData(
+      primarySwatch: Colors.green,
+      fontFamily: 'Arial',
+      appBarTheme: AppBarTheme(
+        backgroundColor: primaryGreen,
+        foregroundColor: Colors.white,
+        elevation: 0,
+        titleTextStyle: TextStyle(
+          fontSize: 20,
+          fontWeight: FontWeight.bold,
+          color: Colors.white,
+        ),
+      ),
+      elevatedButtonTheme: ElevatedButtonThemeData(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: primaryGreen,
+          foregroundColor: Colors.white,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(10),
+          ),
+          elevation: 2,
+        ),
+      ),
+      floatingActionButtonTheme: FloatingActionButtonThemeData(
+        backgroundColor: primaryGreen,
+        foregroundColor: Colors.white,
+      ),
+      cardTheme: CardTheme(
+        elevation: 4,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+      ),
+      sliderTheme: SliderThemeData(
+        activeTrackColor: primaryGreen,
+        thumbColor: primaryGreen,
+        inactiveTrackColor: Colors.grey[300],
+      ),
+    );
+  }
+}
+
+// Performance optimization utilities
+class PerformanceUtils {
+  static const int BATCH_SIZE = 50;
+  
+  static List<T> batchProcess<T>(List<T> items, int batchSize) {
+    if (items.length <= batchSize) return items;
+    return items.take(batchSize).toList();
+  }
+  
+  static Future<void> delay(int milliseconds) {
+    return Future.delayed(Duration(milliseconds: milliseconds));
+  }
+}
+
+// Network utilities for audio streaming
+class NetworkUtils {
+  static Future<bool> isNetworkAvailable() async {
+    try {
+      final response = await http.head(
+        Uri.parse('https://cdn.islamic.network/quran/audio/'),
+      ).timeout(Duration(seconds: 5));
+      return response.statusCode == 200;
+    } catch (e) {
+      return false;
+    }
+  }
+  
+  static Future<bool> isAudioUrlValid(String url) async {
+    try {
+      final response = await http.head(Uri.parse(url)).timeout(Duration(seconds: 5));
+      return response.statusCode == 200;
+    } catch (e) {
+      return false;
+    }
+  }
+}
+
+// Additional constants and configurations
+class QuranConstants {
+  static const int TOTAL_SURAHS = 114;
+  static const int TOTAL_AYAHS = 6236;
+  static const int TOTAL_WORDS = 77449;
+  
+  static const List<String> SURAH_TYPES = ['Meccan', 'Medinan'];
+  
+  static const Map<int, String> SURAH_THEMES = {
+    1: 'Opening/Prayer',
+    2: 'Guidance',
+    3: 'Family of Imran',
+    // Add more themes as needed
+  };
+  
+  static const List<int> MECCAN_SURAHS = [
+    1, 6, 7, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 23, 25, 26, 27, 28, 29, 30, 31, 32, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 50, 51, 52, 53, 54, 55, 56, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97, 100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 111, 112, 113, 114
+  ];
+}
+
+// Cache manager for better performance
+class CacheManager {
+  static final Map<String, dynamic> _cache = {};
+  
+  static void put(String key, dynamic value) {
+    _cache[key] = value;
+  }
+  
+  static T? get<T>(String key) {
+    return _cache[key] as T?;
+  }
+  
+  static void remove(String key) {
+    _cache.remove(key);
+  }
+  
+  static void clear() {
+    _cache.clear();
+  }
+  
+  static bool containsKey(String key) {
+    return _cache.containsKey(key);
+  }
+}
+
+// Enhanced logging utility
+class QuranLogger {
+  static void log(String message, [String? tag]) {
+    final now = DateTime.now();
+    final timeStr = '${now.hour}:${now.minute}:${now.second}';
+    print('[$timeStr] ${tag ?? 'QuranApp'}: $message');
+  }
+  
+  static void error(String message, [dynamic error]) {
+    log('ERROR: $message${error != null ? ' - $error' : ''}', 'ERROR');
+  }
+  
+  static void warning(String message) {
+    log('WARNING: $message', 'WARNING');
+  }
+  
+  static void info(String message) {
+    log('INFO: $message', 'INFO');
+  }
+}
+
+// App configuration
+class AppConfig {
+  static const String APP_NAME = 'Holy Quran';
+  static const String VERSION = '1.0.0';
+  static const String AUTHOR = 'Quran App Developer';
+  
+  // Audio configuration
+  static const String AUDIO_BASE_URL = 'https://cdn.islamic.network/quran/audio-surah/128/';
+  static const int AUDIO_TIMEOUT_SECONDS = 30;
+  static const int MAX_RETRY_ATTEMPTS = 3;
+  
+  // UI configuration
+  static const double MIN_FONT_SIZE = 16.0;
+  static const double MAX_FONT_SIZE = 32.0;
+  static const double DEFAULT_FONT_SIZE = 22.0;
+  
+  // Cache configuration
+  static const int MAX_CACHE_SIZE = 100;
+  static const Duration CACHE_DURATION = Duration(hours: 24);
+}
+
+// Validation utilities
+class ValidationUtils {
+  static bool isValidSurahNumber(int surahNumber) {
+    return surahNumber >= 1 && surahNumber <= 114;
+  }
+  
+  static bool isValidAyahNumber(int surahNumber, int ayahNumber) {
+    if (!isValidSurahNumber(surahNumber)) return false;
+    return ayahNumber >= 1 && ayahNumber <= quran.getVerseCount(surahNumber);
+  }
+  
+  static bool isValidFontSize(double fontSize) {
+    return fontSize >= AppConfig.MIN_FONT_SIZE && fontSize <= AppConfig.MAX_FONT_SIZE;
+  }
+}
+
+// String extensions for better text handling
+extension StringExtensions on String {
+  String get arabicDigits {
+    return replaceAllMapped(RegExp(r'\d'), (match) {
+      const Map<String, String> digits = {
+        '0': '٠', '1': '١', '2': '٢', '3': '٣', '4': '٤',
+        '5': '٥', '6': '٦', '7': '٧', '8': '٨', '9': '٩'
+      };
+      return digits[match.group(0)] ?? match.group(0)!;
+    });
+  }
+  
+  bool get isArabic {
+    return RegExp(r'[\u0600-\u06FF]').hasMatch(this);
+  }
+  
+  String get removeArabicDiacritics {
+    return replaceAll(RegExp(r'[\u064B-\u0652\u0670\u0640]'), '');
+  }
+}
+
+// Duration extensions
+extension DurationExtensions on Duration {
+  String get formatted {
+    String twoDigits(int n) => n.toString().padLeft(2, "0");
+    String twoDigitMinutes = twoDigits(inMinutes.remainder(60));
+    String twoDigitSeconds = twoDigits(inSeconds.remainder(60));
+    return "$twoDigitMinutes:$twoDigitSeconds";
+  }
+}
