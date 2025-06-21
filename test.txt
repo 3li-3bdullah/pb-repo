@@ -1,0 +1,1054 @@
+did you remember the surahs.json file with ayah png shape i said to you save it?
+Edit
+
+I don't have the ability to remember or save files from previous conversations. Each conversation with me starts fresh, and I can't access information from our past interactions.
+
+If you had shared a surahs.json file with ayah PNG shapes in a previous conversation, I wouldn't have access to it now. However, if you'd like to work with that file again, you could:
+
+    Re-upload the surahs.json file to this conversation
+    Share the content again so I can help you work with it
+    Describe what you were trying to accomplish with the ayah PNG shapes, and I can help recreate or continue that work
+
+What would you like to do with the surahs data? I'm happy to help once I have access to the information again.
+
+flutter i have quran code so i wanna you just modify the section that should change or add new thing and tell me the line number i should paste the changes. so in this case i wanna you make the Ayah when i click on it visible like using visibility detector, So surahs (quran) json data at this link https://github.com/3li-3bdullah/pb-repo/blob/main/surahs.json and i will provide you with the ayah png pic for the ayah shape, and option for reading the whole surah, in my code he just read the ayah not whole surah and also i wanna option for repeat the entire surah or select ayah
+Edit
+
+I'll help you modify your Flutter Quran app to add the features you requested. Let me search for the surahs.json file first to understand the structure.
+favicon
+
+I'll work with the existing structure and help you implement the features you requested. Here are the modifications you need to make:
+1. First, add these dependencies to your pubspec.yaml:
+
+yaml
+
+dependencies:
+  visibility_detector: ^0.4.0+2
+
+2. Add imports at the top of your file (around line 1-10):
+
+dart
+
+import 'package:visibility_detector/visibility_detector.dart';
+
+3. Add new variables to your _SurahPageState class (around line 200, after existing variables):
+
+dart
+
+// Add these new variables after line ~215
+bool isPlayingFullSurah = false;
+bool isRepeating = false;
+bool isRepeatingSurah = false;
+int currentPlayingIndex = 0;
+List<int> playQueue = [];
+
+4. Modify the playAyah method (around line 300, replace the entire method):
+
+dart
+
+Future<void> playAyah(int ayahNumber, {bool isFullSurah = false}) async {
+  if (!isFullSurah && playingAyah == ayahNumber) {
+    if (isPlaying) {
+      await audioPlayer.pause();
+    } else {
+      await audioPlayer.resume();
+    }
+    return;
+  }
+
+  setState(() {
+    isLoading = true;
+    isPlayingFullSurah = isFullSurah;
+  });
+
+  if (isFullSurah) {
+    // Setup queue for full surah
+    playQueue = List.generate(widget.surahInfo.numberOfAyahs, (index) => index + 1);
+    currentPlayingIndex = ayahNumber - 1;
+  } else {
+    playQueue = [ayahNumber];
+    currentPlayingIndex = 0;
+  }
+
+  await _playFromQueue();
+}
+
+Future<void> _playFromQueue() async {
+  if (currentPlayingIndex >= playQueue.length) {
+    if (isRepeatingSurah && isPlayingFullSurah) {
+      currentPlayingIndex = 0;
+    } else if (isRepeating && !isPlayingFullSurah) {
+      // Keep playing the same ayah
+    } else {
+      await stopAudio();
+      return;
+    }
+  }
+
+  int ayahNumber = playQueue[currentPlayingIndex];
+
+  try {
+    String audioUrl = getAudioUrl(widget.surahInfo.number, ayahNumber);
+    
+    final response = await http.head(Uri.parse(audioUrl));
+    
+    if (response.statusCode == 200) {
+      await audioPlayer.play(UrlSource(audioUrl));
+      setState(() {
+        playingAyah = ayahNumber;
+      });
+    } else {
+      throw Exception('Audio not found');
+    }
+  } catch (e) {
+    _showErrorSnackBar('Unable to load audio. Please check your internet connection.');
+    await stopAudio();
+  } finally {
+    setState(() {
+      isLoading = false;
+    });
+  }
+}
+
+5. Modify the _setupAudioPlayer method (around line 245, replace the onPlayerStateChanged listener):
+
+dart
+
+audioPlayer.onPlayerStateChanged.listen((PlayerState state) {
+  setState(() {
+    isPlaying = state == PlayerState.playing;
+    isPaused = state == PlayerState.paused;
+    if (state == PlayerState.completed) {
+      // Move to next ayah in queue
+      if (isRepeating && !isPlayingFullSurah) {
+        // Repeat the same ayah
+        _playFromQueue();
+      } else if (isPlayingFullSurah || currentPlayingIndex < playQueue.length - 1) {
+        currentPlayingIndex++;
+        _playFromQueue();
+      } else {
+        playingAyah = null;
+        isPlaying = false;
+        isPaused = false;
+        isPlayingFullSurah = false;
+        _pulseController.stop();
+      }
+    }
+  });
+
+  if (state == PlayerState.playing) {
+    _pulseController.repeat(reverse: true);
+  } else {
+    _pulseController.stop();
+  }
+});
+
+6. Modify the stopAudio method (around line 350):
+
+dart
+
+Future<void> stopAudio() async {
+  await audioPlayer.stop();
+  setState(() {
+    playingAyah = null;
+    isPlaying = false;
+    isPaused = false;
+    isPlayingFullSurah = false;
+    isRepeating = false;
+    isRepeatingSurah = false;
+    position = Duration.zero;
+    playQueue.clear();
+    currentPlayingIndex = 0;
+  });
+  _pulseController.stop();
+}
+
+7. Replace the ayahs display section (around line 550, replace the SliverList with ayahs):
+
+dart
+
+SliverList(
+  delegate: SliverChildBuilderDelegate(
+    (context, index) {
+      int ayahNumber = index + 1;
+      String ayahText = quran.getVerse(widget.surahInfo.number, ayahNumber);
+      bool isCurrentlyPlaying = playingAyah == ayahNumber;
+      
+      return VisibilityDetector(
+        key: Key('ayah_$ayahNumber'),
+        onVisibilityChanged: (visibilityInfo) {
+          if (visibilityInfo.visibleFraction > 0.5) {
+            // Ayah is visible
+            print('Ayah $ayahNumber is visible');
+          }
+        },
+        child: Container(
+          margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+          padding: EdgeInsets.all(24),
+          decoration: BoxDecoration(
+            color: isCurrentlyPlaying ? Colors.green[50] : Colors.white,
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(
+              color: isCurrentlyPlaying ? Colors.green[300]! : Colors.grey[300]!,
+              width: isCurrentlyPlaying ? 2 : 1,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.05),
+                blurRadius: 8,
+                offset: Offset(0, 2),
+              ),
+            ],
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              // Ayah number header
+              Row(
+                children: [
+                  Container(
+                    width: 30,
+                    height: 30,
+                    decoration: BoxDecoration(
+                      color: isCurrentlyPlaying ? Colors.green[600] : Colors.blue[600],
+                      shape: BoxShape.circle,
+                    ),
+                    child: Center(
+                      child: Text(
+                        '$ayahNumber',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ),
+                  Spacer(),
+                  if (isCurrentlyPlaying)
+                    Container(
+                      padding: EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Colors.green[600],
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        'Playing',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+              SizedBox(height: 16),
+              // Ayah text
+              GestureDetector(
+                onTap: () => _showAyahOptions(ayahNumber),
+                child: Text(
+                  ayahText,
+                  style: TextStyle(
+                    fontSize: fontSize,
+                    height: 1.8,
+                    fontWeight: FontWeight.w400,
+                    color: isCurrentlyPlaying ? Colors.green[800] : Colors.black87,
+                  ),
+                  textAlign: TextAlign.justify,
+                  textDirection: TextDirection.rtl,
+                ),
+              ),
+            ],
+          ),
+        ),
+      );
+    },
+    childCount: widget.surahInfo.numberOfAyahs,
+  ),
+),
+
+8. Add new control buttons in the AppBar actions (around line 520):
+
+dart
+
+actions: [
+  // Play full surah button
+  IconButton(
+    icon: Icon(isPlayingFullSurah ? Icons.pause : Icons.play_circle_filled),
+    onPressed: () {
+      if (isPlayingFullSurah) {
+        if (isPlaying) {
+          audioPlayer.pause();
+        } else {
+          audioPlayer.resume();
+        }
+      } else {
+        playAyah(1, isFullSurah: true);
+      }
+    },
+    tooltip: isPlayingFullSurah ? 'Pause Surah' : 'Play Full Surah',
+  ),
+  
+  // Repeat button
+  IconButton(
+    icon: Icon(
+      isRepeatingSurah ? Icons.repeat : Icons.repeat_outlined,
+      color: isRepeatingSurah ? Colors.green[700] : null,
+    ),
+    onPressed: () {
+      setState(() {
+        isRepeatingSurah = !isRepeatingSurah;
+      });
+    },
+    tooltip: 'Repeat Surah',
+  ),
+  
+  IconButton(
+    icon: Icon(Icons.settings),
+    onPressed: _showSettingsDialog,
+    tooltip: 'Settings',
+  ),
+  if (isPlaying || isPaused)
+    IconButton(
+      icon: Icon(Icons.stop),
+      onPressed: stopAudio,
+      tooltip: 'Stop Audio',
+    ),
+],
+
+9. Add a repeat option to the control overlay (around line 690, add after the Play button):
+
+dart
+
+// Add repeat toggle button
+_buildControlButton(
+  icon: isRepeating ? Icons.repeat_one : Icons.repeat_one_outlined,
+  label: 'Repeat',
+  onPressed: () {
+    setState(() {
+      isRepeating = !isRepeating;
+    });
+  },
+),
+
+10. Update the Play button in the control overlay (around line 705):
+
+dart
+
+// Update the Play/Pause button
+_buildControlButton(
+  icon: playingAyah == selectedAyah
+      ? (isPlaying ? Icons.pause : Icons.play_arrow)
+      : Icons.play_arrow,
+  label: playingAyah == selectedAyah
+      ? (isPlaying ? 'Pause' : 'Resume')
+      : 'Play',
+  isPrimary: true,
+  onPressed: isLoading ? null : () => playAyah(selectedAyah!, isFullSurah: false),
+),
+
+These modifications will add:
+
+    Visibility Detection: Each ayah will be wrapped in a VisibilityDetector that detects when it's visible on screen
+    Full Surah Playback: A button in the app bar to play the entire surah
+    Repeat Options:
+        Repeat single ayah (in the control overlay)
+        Repeat entire surah (in the app bar)
+    Enhanced UI: Better visual feedback for currently playing ayah
+    Queue System: Manages playback of multiple ayahs in sequence
+
+The app will now support playing individual ayahs or the entire surah, with repeat options for both modes. Each ayah will be displayed in its own container with visibility detection capabilities.
+
+great. but the variables like isPlayingFullSurah, isRepeatingSurah,playQueue, currentPlayingIndex, isRepeatingSurah where should i define it
+Edit
+
+You should define these variables in the _SurahPageState class, right after the existing variables. Here's exactly where to add them:
+Location: Around line 215, after the existing variables in _SurahPageState class
+
+Find this section in your code:
+
+dart
+
+class _SurahPageState extends State<SurahPage> with TickerProviderStateMixin {
+  late AudioPlayer audioPlayer;
+  int? selectedAyah;
+  int? playingAyah;
+  bool isPlaying = false;
+  bool isLoading = false;
+  bool isPaused = false;
+  Duration duration = Duration.zero;
+  Duration position = Duration.zero;
+  double fontSize = 22.0;
+  late AnimationController _animationController;
+  late Animation<double> _fadeAnimation;
+  late AnimationController _pulseController;
+  late Animation<double> _pulseAnimation;
+
+  // Audio settings
+  List<String> reciters = [
+    'Alafasy_128kbps',
+    'Abdul_Basit_Murattal_192kbps',
+    'Husary_128kbps',
+    'Minshawi_Murattal_128kbps',
+    'Sudais_192kbps',
+  ];
+  
+  List<String> reciterNames = [
+    'Mishary Rashid Alafasy',
+    'Abdul Basit Abdul Samad',
+    'Mahmoud Khalil Al-Husary',
+    'Mohamed Siddiq El-Minshawi',
+    'Abdul Rahman Al-Sudais',
+  ];
+  
+  int selectedReciter = 0;
+
+Add these new variables right after int selectedReciter = 0;:
+
+dart
+
+  int selectedReciter = 0;
+  
+  // ADD THESE NEW VARIABLES HERE:
+  bool isPlayingFullSurah = false;
+  bool isRepeating = false;
+  bool isRepeatingSurah = false;
+  int currentPlayingIndex = 0;
+  List<int> playQueue = [];
+
+So the complete variable section should look like this:
+
+dart
+
+class _SurahPageState extends State<SurahPage> with TickerProviderStateMixin {
+  late AudioPlayer audioPlayer;
+  int? selectedAyah;
+  int? playingAyah;
+  bool isPlaying = false;
+  bool isLoading = false;
+  bool isPaused = false;
+  Duration duration = Duration.zero;
+  Duration position = Duration.zero;
+  double fontSize = 22.0;
+  late AnimationController _animationController;
+  late Animation<double> _fadeAnimation;
+  late AnimationController _pulseController;
+  late Animation<double> _pulseAnimation;
+
+  // Audio settings
+  List<String> reciters = [
+    'Alafasy_128kbps',
+    'Abdul_Basit_Murattal_192kbps',
+    'Husary_128kbps',
+    'Minshawi_Murattal_128kbps',
+    'Sudais_192kbps',
+  ];
+  
+  List<String> reciterNames = [
+    'Mishary Rashid Alafasy',
+    'Abdul Basit Abdul Samad',
+    'Mahmoud Khalil Al-Husary',
+    'Mohamed Siddiq El-Minshawi',
+    'Abdul Rahman Al-Sudais',
+  ];
+  
+  int selectedReciter = 0;
+  
+  // New variables for enhanced audio features
+  bool isPlayingFullSurah = false;
+  bool isRepeating = false;
+  bool isRepeatingSurah = false;
+  int currentPlayingIndex = 0;
+  List<int> playQueue = [];
+
+This is the correct location because:
+
+    They're instance variables of the _SurahPageState class
+    They're accessible to all methods in the class
+    They can be used with setState() to update the UI
+    They're initialized with default values
+
+great, but i wanna the ayahs together not row by row and also i wanna slid from left to right for example when if i at سورة الفاتحة so when i slid it should scroll to سورة البقرة  and etc
+Edit
+
+Great! I'll help you modify the code to display ayahs together in a continuous text format and add swipe navigation between surahs. Here are the changes:
+1. First, add the PageView controller variable (around line 215, with other variables):
+
+dart
+
+int selectedReciter = 0;
+
+// New variables for enhanced audio features
+bool isPlayingFullSurah = false;
+bool isRepeating = false;
+bool isRepeatingSurah = false;
+int currentPlayingIndex = 0;
+List<int> playQueue = [];
+
+// ADD THIS NEW VARIABLE:
+late PageController pageController;
+
+2. Initialize the PageController in initState (around line 240):
+
+dart
+
+@override
+void initState() {
+  super.initState();
+  audioPlayer = AudioPlayer();
+  _setupAudioPlayer();
+  
+  // ADD THIS LINE:
+  pageController = PageController(initialPage: widget.surahInfo.number - 1);
+  
+  _animationController = AnimationController(
+    duration: Duration(milliseconds: 300),
+    vsync: this,
+  );
+  // ... rest of initState
+}
+
+3. Dispose the PageController (around line 500, in dispose method):
+
+dart
+
+@override
+void dispose() {
+  audioPlayer.dispose();
+  _animationController.dispose();
+  _pulseController.dispose();
+  pageController.dispose(); // ADD THIS LINE
+  super.dispose();
+}
+
+4. Replace the entire build method's body (around line 550, replace the Scaffold content):
+
+dart
+
+@override
+Widget build(BuildContext context) {
+  return Scaffold(
+    appBar: AppBar(
+      title: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            widget.surahInfo.name,
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          ),
+          Text(
+            widget.surahInfo.englishName,
+            style: TextStyle(fontSize: 12, fontWeight: FontWeight.normal),
+          ),
+        ],
+      ),
+      actions: [
+        // Play full surah button
+        IconButton(
+          icon: Icon(isPlayingFullSurah ? Icons.pause : Icons.play_circle_filled),
+          onPressed: () {
+            if (isPlayingFullSurah) {
+              if (isPlaying) {
+                audioPlayer.pause();
+              } else {
+                audioPlayer.resume();
+              }
+            } else {
+              playAyah(1, isFullSurah: true);
+            }
+          },
+          tooltip: isPlayingFullSurah ? 'Pause Surah' : 'Play Full Surah',
+        ),
+        
+        // Repeat button
+        IconButton(
+          icon: Icon(
+            isRepeatingSurah ? Icons.repeat : Icons.repeat_outlined,
+            color: isRepeatingSurah ? Colors.green[700] : null,
+          ),
+          onPressed: () {
+            setState(() {
+              isRepeatingSurah = !isRepeatingSurah;
+            });
+          },
+          tooltip: 'Repeat Surah',
+        ),
+        
+        IconButton(
+          icon: Icon(Icons.settings),
+          onPressed: _showSettingsDialog,
+          tooltip: 'Settings',
+        ),
+        if (isPlaying || isPaused)
+          IconButton(
+            icon: Icon(Icons.stop),
+            onPressed: stopAudio,
+            tooltip: 'Stop Audio',
+          ),
+      ],
+    ),
+    body: PageView.builder(
+      controller: pageController,
+      itemCount: 114, // Total number of surahs
+      onPageChanged: (int page) {
+        // Stop current audio when changing page
+        if (isPlaying || isPaused) {
+          stopAudio();
+        }
+        // Update the current surah info if needed
+      },
+      itemBuilder: (context, pageIndex) {
+        int currentSurahNumber = pageIndex + 1;
+        
+        // Get current surah info
+        SurahInfo currentSurah = SurahInfo(
+          number: currentSurahNumber,
+          name: quran.getSurahName(currentSurahNumber),
+          englishName: quran.getSurahNameEnglish(currentSurahNumber),
+          englishNameTranslation: quran.getSurahNameEnglish(currentSurahNumber),
+          numberOfAyahs: quran.getVerseCount(currentSurahNumber),
+          revelationType: _getRevelationType(currentSurahNumber),
+        );
+        
+        return Stack(
+          children: [
+            // Main content
+            CustomScrollView(
+              slivers: [
+                // Surah header
+                SliverToBoxAdapter(
+                  child: Container(
+                    margin: EdgeInsets.all(16),
+                    padding: EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [Colors.green[700]!, Colors.green[500]!],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      borderRadius: BorderRadius.circular(15),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.green.withOpacity(0.3),
+                          blurRadius: 10,
+                          offset: Offset(0, 4),
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      children: [
+                        Text(
+                          currentSurah.name,
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 28,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        SizedBox(height: 8),
+                        Text(
+                          '${currentSurah.englishNameTranslation} • ${currentSurah.revelationType}',
+                          style: TextStyle(
+                            color: Colors.white70,
+                            fontSize: 16,
+                          ),
+                        ),
+                        SizedBox(height: 4),
+                        Text(
+                          '${currentSurah.numberOfAyahs} verses',
+                          style: TextStyle(
+                            color: Colors.white70,
+                            fontSize: 14,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+
+                // Bismillah (except for Surah At-Tawba)
+                if (currentSurahNumber != 9 && currentSurahNumber != 1)
+                  SliverToBoxAdapter(
+                    child: Container(
+                      margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      padding: EdgeInsets.all(20),
+                      decoration: BoxDecoration(
+                        color: Colors.grey[50],
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.grey[300]!),
+                      ),
+                      child: Text(
+                        'بِسۡمِ ٱللَّهِ ٱلرَّحۡمَٰنِ ٱلرَّحِيمِ',
+                        style: TextStyle(
+                          fontSize: fontSize + 2,
+                          height: 2.0,
+                          fontWeight: FontWeight.w500,
+                        ),
+                        textAlign: TextAlign.center,
+                        textDirection: TextDirection.rtl,
+                      ),
+                    ),
+                  ),
+
+                // All Ayahs together
+                SliverToBoxAdapter(
+                  child: VisibilityDetector(
+                    key: Key('surah_${currentSurahNumber}'),
+                    onVisibilityChanged: (visibilityInfo) {
+                      if (visibilityInfo.visibleFraction > 0.5) {
+                        print('Surah ${currentSurahNumber} is visible');
+                      }
+                    },
+                    child: Container(
+                      margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      padding: EdgeInsets.all(24),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.grey[300]!, width: 1),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.05),
+                            blurRadius: 8,
+                            offset: Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: RichText(
+                        textAlign: TextAlign.justify,
+                        textDirection: TextDirection.rtl,
+                        text: TextSpan(
+                          children: List.generate(currentSurah.numberOfAyahs, (index) {
+                            int ayahNumber = index + 1;
+                            String ayahText = quran.getVerse(currentSurahNumber, ayahNumber);
+                            bool isCurrentlyPlaying = playingAyah == ayahNumber && 
+                                                    widget.surahInfo.number == currentSurahNumber;
+                            
+                            return TextSpan(
+                              children: [
+                                TextSpan(
+                                  text: ayahText,
+                                  style: TextStyle(
+                                    fontSize: fontSize,
+                                    height: 1.8,
+                                    fontWeight: FontWeight.w400,
+                                    color: isCurrentlyPlaying ? Colors.green[800] : Colors.black87,
+                                    backgroundColor: isCurrentlyPlaying ? Colors.green[100] : null,
+                                  ),
+                                  recognizer: TapGestureRecognizer()
+                                    ..onTap = () {
+                                      if (currentSurahNumber == widget.surahInfo.number) {
+                                        _showAyahOptions(ayahNumber);
+                                      }
+                                    },
+                                ),
+                                TextSpan(
+                                  text: ' ﴿${ayahNumber}﴾ ',
+                                  style: TextStyle(
+                                    fontSize: fontSize * 0.85,
+                                    height: 1.8,
+                                    fontWeight: FontWeight.bold,
+                                    color: isCurrentlyPlaying ? Colors.green[700] : Colors.blue[700],
+                                    backgroundColor: isCurrentlyPlaying ? Colors.green[50] : null,
+                                  ),
+                                  recognizer: TapGestureRecognizer()
+                                    ..onTap = () {
+                                      if (currentSurahNumber == widget.surahInfo.number) {
+                                        _showAyahOptions(ayahNumber);
+                                      }
+                                    },
+                                ),
+                                if (ayahNumber < currentSurah.numberOfAyahs)
+                                  TextSpan(text: ' '),
+                              ],
+                            );
+                          }).expand((span) => span.children!).toList(),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+
+                // Navigation hint
+                SliverToBoxAdapter(
+                  child: Container(
+                    margin: EdgeInsets.all(16),
+                    padding: EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: Colors.grey[100],
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        if (currentSurahNumber > 1)
+                          Text(
+                            '← Previous: ${quran.getSurahNameEnglish(currentSurahNumber - 1)}',
+                            style: TextStyle(
+                              color: Colors.grey[600],
+                              fontSize: 12,
+                            ),
+                          ),
+                        Spacer(),
+                        Text(
+                          'Swipe to navigate',
+                          style: TextStyle(
+                            color: Colors.grey[500],
+                            fontSize: 11,
+                            fontStyle: FontStyle.italic,
+                          ),
+                        ),
+                        Spacer(),
+                        if (currentSurahNumber < 114)
+                          Text(
+                            'Next: ${quran.getSurahNameEnglish(currentSurahNumber + 1)} →',
+                            style: TextStyle(
+                              color: Colors.grey[600],
+                              fontSize: 12,
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ),
+
+                // Bottom padding for overlay
+                SliverToBoxAdapter(
+                  child: SizedBox(height: selectedAyah != null ? 140 : 20),
+                ),
+              ],
+            ),
+
+            // Audio control overlay (only show for current surah)
+            if (selectedAyah != null && currentSurahNumber == widget.surahInfo.number)
+              Positioned(
+                bottom: 0,
+                left: 0,
+                right: 0,
+                child: FadeTransition(
+                  opacity: _fadeAnimation,
+                  child: Container(
+                    margin: EdgeInsets.all(16),
+                    padding: EdgeInsets.all(20),
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(20),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.1),
+                          blurRadius: 20,
+                          offset: Offset(0, -2),
+                        ),
+                      ],
+                    ),
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        // Ayah info header
+                        Row(
+                          children: [
+                            Container(
+                              padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  colors: [Colors.green[700]!, Colors.green[500]!],
+                                ),
+                                borderRadius: BorderRadius.circular(15),
+                              ),
+                              child: Text(
+                                'Verse $selectedAyah',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                            Spacer(),
+                            if (isLoading)
+                              SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                  strokeWidth: 2,
+                                  valueColor: AlwaysStoppedAnimation<Color>(Colors.green[700]!),
+                                ),
+                              ),
+                          ],
+                        ),
+                        
+                        SizedBox(height: 16),
+                        
+                        // Audio progress bar (only show when playing)
+                        if (playingAyah == selectedAyah && (isPlaying || isPaused))
+                          Column(
+                            children: [
+                              Row(
+                                children: [
+                                  Text(
+                                    _formatDuration(position),
+                                    style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                                  ),
+                                  Expanded(
+                                    child: Slider(
+                                      value: position.inSeconds.toDouble(),
+                                      max: duration.inSeconds.toDouble(),
+                                      activeColor: Colors.green[700],
+                                      inactiveColor: Colors.grey[300],
+                                      onChanged: (value) async {
+                                        await audioPlayer.seek(Duration(seconds: value.toInt()));
+                                      },
+                                    ),
+                                  ),
+                                  Text(
+                                    _formatDuration(duration),
+                                    style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                                  ),
+                                ],
+                              ),
+                              SizedBox(height: 8),
+                            ],
+                          ),
+                        
+                        // Control buttons
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                          children: [
+                            // Copy button
+                            _buildControlButton(
+                              icon: Icons.copy,
+                              label: 'Copy',
+                              onPressed: () {
+                                String ayahText = quran.getVerse(widget.surahInfo.number, selectedAyah!);
+                                Clipboard.setData(ClipboardData(text: ayahText));
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text('Verse copied to clipboard'),
+                                    backgroundColor: Colors.green[700],
+                                    behavior: SnackBarBehavior.floating,
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                  ),
+                                );
+                              },
+                            ),
+                            
+                            // Repeat toggle button
+                            _buildControlButton(
+                              icon: isRepeating ? Icons.repeat_one : Icons.repeat_one_outlined,
+                              label: 'Repeat',
+                              onPressed: () {
+                                setState(() {
+                                  isRepeating = !isRepeating;
+                                });
+                              },
+                            ),
+                            
+                            // Play/Pause button
+                            _buildControlButton(
+                              icon: playingAyah == selectedAyah
+                                  ? (isPlaying ? Icons.pause : Icons.play_arrow)
+                                  : Icons.play_arrow,
+                              label: playingAyah == selectedAyah
+                                  ? (isPlaying ? 'Pause' : 'Resume')
+                                  : 'Play',
+                              isPrimary: true,
+                              onPressed: isLoading ? null : () => playAyah(selectedAyah!, isFullSurah: false),
+                            ),
+                            
+                            // Share button
+                            _buildControlButton(
+                              icon: Icons.share,
+                              label: 'Share',
+                              onPressed: () {
+                                String ayahText = quran.getVerse(widget.surahInfo.number, selectedAyah!);
+                                String shareText = '''
+${widget.surahInfo.name} - ${widget.surahInfo.englishName}
+Verse $selectedAyah:
+
+$ayahText
+
+${widget.surahInfo.englishNameTranslation} ${selectedAyah}:${widget.surahInfo.number}
+                                '''.trim();
+                                
+                                Clipboard.setData(ClipboardData(text: shareText));
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text('Verse copied for sharing'),
+                                    backgroundColor: Colors.green[700],
+                                    behavior: SnackBarBehavior.floating,
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                  ),
+                                );
+                              },
+                            ),
+                            
+                            // Bookmark button
+                            _buildControlButton(
+                              icon: Icons.bookmark_border,
+                              label: 'Bookmark',
+                              onPressed: () async {
+                                SharedPreferences prefs = await SharedPreferences.getInstance();
+                                List<String> bookmarks = prefs.getStringList('bookmarks') ?? [];
+                                String bookmarkKey = '${widget.surahInfo.number}:$selectedAyah';
+                                
+                                if (bookmarks.contains(bookmarkKey)) {
+                                  bookmarks.remove(bookmarkKey);
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text('Bookmark removed'),
+                                      backgroundColor: Colors.orange[700],
+                                      behavior: SnackBarBehavior.floating,
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                    ),
+                                  );
+                                } else {
+                                  bookmarks.add(bookmarkKey);
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text('Verse bookmarked'),
+                                      backgroundColor: Colors.green[700],
+                                      behavior: SnackBarBehavior.floating,
+                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                    ),
+                                  );
+                                }
+                                
+                                await prefs.setStringList('bookmarks', bookmarks);
+                              },
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        );
+      },
+    ),
+  );
+}
+
+5. Add the _getRevelationType method to the _SurahPageState class (if it doesn't exist):
+
+dart
+
+String _getRevelationType(int surahNumber) {
+  // Meccan surahs (based on traditional order)
+  List<int> meccanSurahs = [
+    1, 6, 7, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 23, 25, 26, 27, 28, 29, 30, 31, 32, 34, 35, 36, 37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 50, 51, 52, 53, 54, 55, 56, 67, 68, 69, 70, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 82, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 95, 96, 97, 100, 101, 102, 103, 104, 105, 106, 107, 108, 109, 111, 112, 113, 114
+  ];
+  return meccanSurahs.contains(surahNumber) ? "Meccan" : "Medinan";
+}
+
+These changes will:
+
+    Display ayahs together: All ayahs in a surah are now displayed as continuous text in one container
+    Enable swipe navigation: You can swipe left/right to navigate between surahs
+    Show navigation hints: Shows previous/next surah names at the bottom
+    Maintain audio controls: Audio controls only appear for the current surah
+    Add visibility detection: Each surah page is wrapped in a VisibilityDetector
+
+Now you can swipe horizontally to navigate between surahs, and all ayahs are displayed together as continuous text with ayah numbers in decorative brackets.
