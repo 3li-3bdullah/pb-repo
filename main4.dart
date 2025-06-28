@@ -1,21 +1,55 @@
+// pubspec.yaml dependencies needed:
+/*
+dependencies:
+  flutter:
+    sdk: flutter
+  quran: ^1.2.1
+  audioplayers: ^5.2.1
+  http: ^1.1.0
+  shared_preferences: ^2.2.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+*/
 
 // main.dart
 import 'dart:developer';
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:quran/quran.dart' as quran;
 import 'package:audioplayers/audioplayers.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'dart:convert';
 import 'package:flutter/services.dart';
-import 'package:visibility_detector/visibility_detector.dart';
-import 'package:xquran/skoon/QuranPages/helpers/convertNumberToAr.dart';
 
 void main() {
   runApp(MyApp());
+}
+
+// Add these classes after SurahInfo class
+class QuranPage {
+  final int pageNumber;
+  final List<SurahContent> surahs;
+  
+  QuranPage({required this.pageNumber, required this.surahs});
+}
+
+class SurahContent {
+  final SurahInfo surahInfo;
+  final List<int> ayahsOnThisPage;
+  final bool showBismillah;
+  final bool showSurahHeader;
+  
+  SurahContent({
+    required this.surahInfo,
+    required this.ayahsOnThisPage,
+    this.showBismillah = false,
+    this.showSurahHeader = false,
+  });
 }
 
 class MyApp extends StatelessWidget {
@@ -347,6 +381,9 @@ class _SurahPageState extends State<SurahPage> with TickerProviderStateMixin {
   PageController? _versePageController;
   int currentVersePage = 0;
 
+  List<QuranPage> quranPages = [];
+int currentPageIndex = 0;
+
   // ADD THESE NEW VARIABLES HERE:
   bool isPlayingFullSurah = false;
   bool isRepeating = false;
@@ -380,7 +417,7 @@ class _SurahPageState extends State<SurahPage> with TickerProviderStateMixin {
     super.initState();
     currentSurah = widget.surahInfo;
     _initializeAllSurahs();
-    _pageController = PageController(initialPage: widget.surahInfo.number - 1);
+    _pageController = PageController();
     _versePageController = PageController();
     audioPlayer = AudioPlayer();
     _setupAudioPlayer();
@@ -443,22 +480,125 @@ class _SurahPageState extends State<SurahPage> with TickerProviderStateMixin {
       setState(() => position = p);
     });
   }
-
-  Future<void> _initializeAllSurahs() async {
-    final surahsJson = await rootBundle.loadString('assets/data/surahs.json');
-    final surahs = json.decode(surahsJson);
-    log('the xquran length is ${surahs.length}');
-    for (int i = 1; i <= 114; i++) {
-      allSurahs.add(SurahInfo(
-        number: i,
-        name: surahs[i - 1]['name'], // quran.getSurahNameArabic(i),
-        englishName: quran.getSurahNameEnglish(i),
-        englishNameTranslation: quran.getSurahNameEnglish(i),
-        numberOfAyahs: quran.getVerseCount(i),
-        revelationType: _getRevelationType(i),
+Future<void> _initializeAllSurahs() async {
+  final surahsJson = await rootBundle.loadString('assets/data/surahs.json');
+  final surahs = json.decode(surahsJson);
+  log('the xquran length is ${surahs.length}');
+  
+  for (int i = 1; i <= 114; i++) {
+    allSurahs.add(SurahInfo(
+      number: i,
+      name: surahs[i - 1]['name'],
+      englishName: quran.getSurahNameEnglish(i),
+      englishNameTranslation: quran.getSurahNameEnglish(i),
+      numberOfAyahs: quran.getVerseCount(i),
+      revelationType: _getRevelationType(i),
+    ));
+  }
+  
+  // Generate Quran pages after loading surahs
+  _generateQuranPages();
+}
+void _generateQuranPages() {
+  quranPages.clear();
+  int currentPage = 1;
+  
+  // Define which surahs should be grouped together (like real Quran)
+  Map<int, List<int>> pageGroupings = {
+    // Last 3 surahs on one page
+    604: [112, 113, 114], // Al-Ikhlas, Al-Falaq, An-Nas
+    603: [110, 111], // An-Nasr, Al-Masad
+    602: [108, 109], // Al-Kawthar, Al-Kafirun
+    601: [106, 107], // Quraysh, Al-Ma'un
+    600: [104, 105], // Al-Humazah, Al-Fil
+    599: [102, 103], // At-Takathur, Al-Asr
+    598: [100, 101], // Al-Adiyat, Al-Qari'ah
+    597: [97, 98, 99], // Al-Qadr, Al-Bayyina, Az-Zalzala
+    // Add more groupings as needed
+  };
+  
+  // Process special grouped pages first
+  Set<int> processedSurahs = {};
+  
+  pageGroupings.forEach((pageNum, surahNumbers) {
+    List<SurahContent> pageSurahs = [];
+    
+    for (int i = 0; i < surahNumbers.length; i++) {
+      int surahNum = surahNumbers[i];
+      SurahInfo surah = allSurahs[surahNum - 1];
+      
+      pageSurahs.add(SurahContent(
+        surahInfo: surah,
+        ayahsOnThisPage: List.generate(surah.numberOfAyahs, (index) => index + 1),
+        showBismillah: i == 0 && surahNum != 1 && surahNum != 9,
+        showSurahHeader: true,
       ));
+      
+      processedSurahs.add(surahNum);
+    }
+    
+    quranPages.add(QuranPage(pageNumber: pageNum, surahs: pageSurahs));
+  });
+  
+  // Process remaining surahs (longer ones get their own pages)
+  for (int i = 1; i <= 114; i++) {
+    if (!processedSurahs.contains(i)) {
+      SurahInfo surah = allSurahs[i - 1];
+      
+      if (surah.numberOfAyahs <= 10) {
+        // Small surahs might be grouped (if not already processed)
+        quranPages.add(QuranPage(
+          pageNumber: currentPage++,
+          surahs: [
+            SurahContent(
+              surahInfo: surah,
+              ayahsOnThisPage: List.generate(surah.numberOfAyahs, (index) => index + 1),
+              showBismillah: surah.number != 1 && surah.number != 9,
+              showSurahHeader: true,
+            )
+          ],
+        ));
+      } else {
+        // Longer surahs get divided into multiple pages
+        const int versesPerPage = 7;
+        int totalPages = (surah.numberOfAyahs / versesPerPage).ceil();
+        
+        for (int pageIndex = 0; pageIndex < totalPages; pageIndex++) {
+          int startVerse = (pageIndex * versesPerPage) + 1;
+          int endVerse = ((pageIndex + 1) * versesPerPage).clamp(1, surah.numberOfAyahs);
+          
+          List<int> versesOnPage = [];
+          for (int v = startVerse; v <= endVerse; v++) {
+            versesOnPage.add(v);
+          }
+          
+          quranPages.add(QuranPage(
+            pageNumber: currentPage++,
+            surahs: [
+              SurahContent(
+                surahInfo: surah,
+                ayahsOnThisPage: versesOnPage,
+                showBismillah: pageIndex == 0 && surah.number != 1 && surah.number != 9,
+                showSurahHeader: pageIndex == 0,
+              )
+            ],
+          ));
+        }
+      }
     }
   }
+  
+  // Sort pages by page number
+  quranPages.sort((a, b) => a.pageNumber.compareTo(b.pageNumber));
+  
+  // Find current surah's page
+  for (int i = 0; i < quranPages.length; i++) {
+    if (quranPages[i].surahs.any((s) => s.surahInfo.number == currentSurah.number)) {
+      currentPageIndex = i;
+      break;
+    }
+  }
+}
 
   Future<void> _loadSettings() async {
     SharedPreferences prefs = await SharedPreferences.getInstance();
@@ -889,346 +1029,375 @@ class _SurahPageState extends State<SurahPage> with TickerProviderStateMixin {
     super.dispose();
   }
 
-  @override
-  Widget build(BuildContext context) {
+ @override
+Widget build(BuildContext context) {
+  if (quranPages.isEmpty) {
     return Scaffold(
       backgroundColor: Color(0xfff7e7d0),
-      appBar: AppBar(
-        title: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              currentSurah.name,
-              style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-            ),
-            Text(
-              currentSurah.englishName,
-              style: TextStyle(fontSize: 12, fontWeight: FontWeight.normal),
-            ),
-          ],
-        ),
-        actions: [
-          // Previous Surah
-          IconButton(
-            icon: Icon(Icons.skip_previous),
-            onPressed: currentSurah.number > 1
-                ? () {
-                    _pageController.previousPage(
-                      duration: Duration(milliseconds: 300),
-                      curve: Curves.easeInOut,
-                    );
-                  }
-                : null,
-            tooltip: 'Previous Surah',
+      body: Center(child: CircularProgressIndicator()),
+    );
+  }
+
+  return Scaffold(
+    backgroundColor: Color(0xfff7e7d0),
+    appBar: AppBar(
+      title: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Page ${quranPages[currentPageIndex].pageNumber}',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
           ),
-          // Next Surah
-          IconButton(
-            icon: Icon(Icons.skip_next),
-            onPressed: currentSurah.number < 114
-                ? () {
-                    _pageController.nextPage(
-                      duration: Duration(milliseconds: 300),
-                      curve: Curves.easeInOut,
-                    );
-                  }
-                : null,
-            tooltip: 'Next Surah',
-          ),
-          IconButton(
-            icon: Icon(Icons.settings),
-            onPressed: _showSettingsDialog,
-            tooltip: 'Settings',
-          ),
-          if (isPlaying || isPaused)
-            IconButton(
-              icon: Icon(Icons.stop),
-              onPressed: stopAudio,
-              tooltip: 'Stop Audio',
-            ),
-          IconButton(
-            icon: Icon(
-                isPlayingFullSurah ? Icons.pause : Icons.play_circle_filled),
-            onPressed: () {
-              if (isPlayingFullSurah) {
-                if (isPlaying) {
-                  audioPlayer.pause();
-                } else {
-                  audioPlayer.resume();
-                }
-              } else {
-                playAyah(1, isFullSurah: true);
-              }
-            },
-            tooltip: isPlayingFullSurah ? 'Pause Surah' : 'Play Full Surah',
-          ),
-          IconButton(
-            icon: Icon(
-              isRepeatingSurah ? Icons.repeat : Icons.repeat_outlined,
-              color: isRepeatingSurah ? Colors.green[700] : null,
-            ),
-            onPressed: () {
-              setState(() {
-                isRepeatingSurah = !isRepeatingSurah;
-              });
-            },
-            tooltip: 'Repeat Surah',
+          Text(
+            '${quranPages[currentPageIndex].surahs.map((s) => s.surahInfo.englishName).join(", ")}',
+            style: TextStyle(fontSize: 12, fontWeight: FontWeight.normal),
           ),
         ],
       ),
-      body: Stack(
-        children: [
-          PageView.builder(
-            controller: _pageController,
-            itemCount: 114,
-            onPageChanged: (index) {
-              setState(() {
-                currentSurah = allSurahs[index];
-                // Stop audio when changing surah
-                stopAudio();
-                selectedAyah = null;
-              });
-            },
-            itemBuilder: (context, surahIndex) {
-              SurahInfo surah = allSurahs[surahIndex];
-              return _buildSurahContent(surah);
-            },
+      actions: [
+        IconButton(
+          icon: Icon(Icons.skip_previous),
+          onPressed: currentPageIndex > 0
+              ? () {
+                  setState(() {
+                    currentPageIndex--;
+                    _updateCurrentSurah();
+                  });
+                }
+              : null,
+          tooltip: 'Previous Page',
+        ),
+        IconButton(
+          icon: Icon(Icons.skip_next),
+          onPressed: currentPageIndex < quranPages.length - 1
+              ? () {
+                  setState(() {
+                    currentPageIndex++;
+                    _updateCurrentSurah();
+                  });
+                }
+              : null,
+          tooltip: 'Next Page',
+        ),
+        IconButton(
+          icon: Icon(Icons.settings),
+          onPressed: _showSettingsDialog,
+          tooltip: 'Settings',
+        ),
+        if (isPlaying || isPaused)
+          IconButton(
+            icon: Icon(Icons.stop),
+            onPressed: stopAudio,
+            tooltip: 'Stop Audio',
           ),
-
-          // Audio control overlay
-          // Audio control overlay
-          if (selectedAyah != null)
-            Positioned(
-              bottom: 0,
-              left: 0,
-              right: 0,
-              child: FadeTransition(
-                opacity: _fadeAnimation,
-                child: Container(
-                  margin: EdgeInsets.all(16),
-                  padding: EdgeInsets.all(20),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(20),
-                    boxShadow: [
-                      BoxShadow(
-                        color: Colors.black.withOpacity(0.1),
-                        blurRadius: 20,
-                        offset: Offset(0, -2),
-                      ),
-                    ],
-                  ),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      // Ayah info header
-                      Row(
-                        children: [
-                          Container(
-                            padding: EdgeInsets.symmetric(
-                                horizontal: 12, vertical: 6),
-                            decoration: BoxDecoration(
-                              gradient: LinearGradient(
-                                colors: [
-                                  Colors.green[700]!,
-                                  Colors.green[500]!
-                                ],
-                              ),
-                              borderRadius: BorderRadius.circular(15),
+      ],
+    ),
+    body: Stack(
+      children: [
+        PageView.builder(
+          itemCount: quranPages.length,
+          controller: PageController(initialPage: currentPageIndex),
+          onPageChanged: (index) {
+            setState(() {
+              currentPageIndex = index;
+              _updateCurrentSurah();
+              stopAudio();
+              selectedAyah = null;
+            });
+          },
+          itemBuilder: (context, index) {
+            return _buildQuranPage(quranPages[index]);
+          },
+        ),
+        
+        // Keep your existing audio control overlay here
+        if (selectedAyah != null)
+          Positioned(
+            bottom: 0,
+            left: 0,
+            right: 0,
+            child: FadeTransition(
+              opacity: _fadeAnimation,
+              child: Container(
+                margin: EdgeInsets.all(16),
+                padding: EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.1),
+                      blurRadius: 20,
+                      offset: Offset(0, -2),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // Keep your existing audio controls here
+                    Row(
+                      children: [
+                        Container(
+                          padding: EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              colors: [Colors.green[700]!, Colors.green[500]!],
                             ),
-                            child: Text(
-                              'Verse $selectedAyah',
-                              style: TextStyle(
-                                color: Colors.white,
-                                fontSize: 14,
-                                fontWeight: FontWeight.bold,
-                              ),
+                            borderRadius: BorderRadius.circular(15),
+                          ),
+                          child: Text(
+                            'Verse $selectedAyah',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold,
                             ),
                           ),
-                          Spacer(),
-                          if (isLoading)
-                            SizedBox(
-                              width: 20,
-                              height: 20,
-                              child: CircularProgressIndicator(
-                                strokeWidth: 2,
-                                valueColor: AlwaysStoppedAnimation<Color>(
-                                    Colors.green[700]!),
-                              ),
-                            ),
-                        ],
-                      ),
-
-                      SizedBox(height: 16),
-
-                      // Audio progress bar (only show when playing)
-                      if (playingAyah == selectedAyah &&
-                          (isPlaying || isPaused))
-                        Column(
-                          children: [
-                            Row(
-                              children: [
-                                Text(
-                                  _formatDuration(position),
-                                  style: TextStyle(
-                                      fontSize: 12, color: Colors.grey[600]),
-                                ),
-                                Expanded(
-                                  child: Slider(
-                                    value: position.inSeconds.toDouble(),
-                                    max: duration.inSeconds.toDouble(),
-                                    activeColor: Colors.green[700],
-                                    inactiveColor: Colors.grey[300],
-                                    onChanged: (value) async {
-                                      await audioPlayer.seek(
-                                          Duration(seconds: value.toInt()));
-                                    },
-                                  ),
-                                ),
-                                Text(
-                                  _formatDuration(duration),
-                                  style: TextStyle(
-                                      fontSize: 12, color: Colors.grey[600]),
-                                ),
-                              ],
-                            ),
-                            SizedBox(height: 8),
-                          ],
                         ),
-
-                      // Control buttons
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-                        children: [
-                          // Copy button
-                          _buildControlButton(
-                            icon: Icons.copy,
-                            label: 'Copy',
-                            onPressed: () {
-                              String ayahText = quran.getVerse(
-                                  currentSurah.number, selectedAyah!);
+                        Spacer(),
+                        if (isLoading)
+                          SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                              valueColor: AlwaysStoppedAnimation<Color>(Colors.green[700]!),
+                            ),
+                          ),
+                      ],
+                    ),
+                    SizedBox(height: 16),
+                    // Add your existing control buttons here
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                      children: [
+                        _buildControlButton(
+                          icon: Icons.copy,
+                          label: 'Copy',
+                          onPressed: () {
+                            // Find which surah contains the selected ayah
+                            SurahInfo? targetSurah;
+                            for (var surahContent in quranPages[currentPageIndex].surahs) {
+                              if (surahContent.ayahsOnThisPage.contains(selectedAyah!)) {
+                                targetSurah = surahContent.surahInfo;
+                                break;
+                              }
+                            }
+                            
+                            if (targetSurah != null) {
+                              String ayahText = quran.getVerse(targetSurah.number, selectedAyah!);
                               Clipboard.setData(ClipboardData(text: ayahText));
                               ScaffoldMessenger.of(context).showSnackBar(
                                 SnackBar(
                                   content: Text('Verse copied to clipboard'),
                                   backgroundColor: Colors.green[700],
                                   behavior: SnackBarBehavior.floating,
-                                  shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(10)),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                                 ),
                               );
-                            },
-                          ),
-
-                          // Play/Pause button
-                          _buildControlButton(
-                            icon: playingAyah == selectedAyah
-                                ? (isPlaying ? Icons.pause : Icons.play_arrow)
-                                : Icons.play_arrow,
-                            label: playingAyah == selectedAyah
-                                ? (isPlaying ? 'Pause' : 'Resume')
-                                : 'Play',
-                            isPrimary: true,
-                            onPressed: isLoading
-                                ? null
-                                : () =>
-                                    playAyah(selectedAyah!, isFullSurah: false),
-                          ),
-
-                          // Repeat toggle button
-                          _buildControlButton(
-                            icon: isRepeating
-                                ? Icons.repeat_one
-                                : Icons.repeat_one_outlined,
-                            label: 'Repeat',
-                            onPressed: () {
-                              setState(() {
-                                isRepeating = !isRepeating;
-                              });
-                            },
-                          ),
-
-                          // Share button
-                          _buildControlButton(
-                            icon: Icons.share,
-                            label: 'Share',
-                            onPressed: () {
-                              String ayahText = quran.getVerse(
-                                  currentSurah.number, selectedAyah!);
-                              String shareText = '''
-${currentSurah.name} - ${currentSurah.englishName}
-Verse $selectedAyah:
-
-$ayahText
-
-${currentSurah.englishNameTranslation} ${selectedAyah}:${currentSurah.number}
-                    '''
-                                  .trim();
-
-                              Clipboard.setData(ClipboardData(text: shareText));
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text('Verse copied for sharing'),
-                                  backgroundColor: Colors.green[700],
-                                  behavior: SnackBarBehavior.floating,
-                                  shape: RoundedRectangleBorder(
-                                      borderRadius: BorderRadius.circular(10)),
-                                ),
-                              );
-                            },
-                          ),
-
-                          // Bookmark button
-                          _buildControlButton(
-                            icon: Icons.bookmark_border,
-                            label: 'Bookmark',
-                            onPressed: () async {
-                              SharedPreferences prefs =
-                                  await SharedPreferences.getInstance();
-                              List<String> bookmarks =
-                                  prefs.getStringList('bookmarks') ?? [];
-                              String bookmarkKey =
-                                  '${currentSurah.number}:$selectedAyah';
-
-                              if (bookmarks.contains(bookmarkKey)) {
-                                bookmarks.remove(bookmarkKey);
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text('Bookmark removed'),
-                                    backgroundColor: Colors.orange[700],
-                                    behavior: SnackBarBehavior.floating,
-                                    shape: RoundedRectangleBorder(
-                                        borderRadius:
-                                            BorderRadius.circular(10)),
-                                  ),
-                                );
-                              } else {
-                                bookmarks.add(bookmarkKey);
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(
-                                    content: Text('Verse bookmarked'),
-                                    backgroundColor: Colors.green[700],
-                                    behavior: SnackBarBehavior.floating,
-                                    shape: RoundedRectangleBorder(
-                                        borderRadius:
-                                            BorderRadius.circular(10)),
-                                  ),
-                                );
+                            }
+                          },
+                        ),
+                        _buildControlButton(
+                          icon: playingAyah == selectedAyah
+                              ? (isPlaying ? Icons.pause : Icons.play_arrow)
+                              : Icons.play_arrow,
+                          label: playingAyah == selectedAyah
+                              ? (isPlaying ? 'Pause' : 'Resume')
+                              : 'Play',
+                          isPrimary: true,
+                          onPressed: isLoading ? null : () {
+                            // Find which surah contains the selected ayah
+                            SurahInfo? targetSurah;
+                            for (var surahContent in quranPages[currentPageIndex].surahs) {
+                              if (surahContent.ayahsOnThisPage.contains(selectedAyah!)) {
+                                targetSurah = surahContent.surahInfo;
+                                currentSurah = targetSurah;
+                                break;
                               }
-
-                              await prefs.setStringList('bookmarks', bookmarks);
-                            },
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
+                            }
+                            if (targetSurah != null) {
+                              playAyah(selectedAyah!, isFullSurah: false);
+                            }
+                          },
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
               ),
             ),
-        ],
+          ),
+      ],
+    ),
+  );
+}
+void _updateCurrentSurah() {
+  if (quranPages.isNotEmpty && currentPageIndex < quranPages.length) {
+    // Update current surah to the first surah on the current page
+    currentSurah = quranPages[currentPageIndex].surahs.first.surahInfo;
+  }
+}
+
+Widget _buildQuranPage(QuranPage page) {
+  return Container(
+    margin: EdgeInsets.all(16),
+    child: Column(
+      children: [
+        Expanded(
+          child: SingleChildScrollView(
+            child: Column(
+              children: page.surahs.map((surahContent) => 
+                _buildSurahContentOnPage(surahContent)).toList(),
+            ),
+          ),
+        ),
+        // Page number at bottom
+        Container(
+          margin: EdgeInsets.only(top: 8),
+          child: Text(
+            'Page ${page.pageNumber}',
+            style: TextStyle(
+              fontSize: 14,
+              color: Colors.grey[600],
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ),
+        SizedBox(height: selectedAyah != null ? 140 : 20),
+      ],
+    ),
+  );
+}
+
+Widget _buildSurahContentOnPage(SurahContent surahContent) {
+  return Container(
+    margin: EdgeInsets.only(bottom: 20),
+    child: Column(
+      children: [
+        // Surah header (if it's the beginning of a surah)
+        if (surahContent.showSurahHeader)
+          Container(
+            margin: EdgeInsets.only(bottom: 16),
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                Image.asset(
+                  'assets/images/surahBorder.png',
+                  color: Colors.teal,
+                  errorBuilder: (context, error, stackTrace) {
+                    return Container(
+                      padding: EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        border: Border.all(color: Colors.teal),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        surahContent.surahInfo.name,
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.bold,
+                          color: Colors.teal,
+                        ),
+                      ),
+                    );
+                  },
+                ),
+                Positioned(
+                  child: Text(
+                    surahContent.surahInfo.name,
+                    style: TextStyle(fontFamily: 'UthmanicHafs', fontSize: 18),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        
+        // Bismillah (if needed)
+        if (surahContent.showBismillah)
+          Container(
+            margin: EdgeInsets.only(bottom: 16),
+            child: Text(
+              'بِسۡمِ ٱللَّهِ ٱلرَّحۡمَٰنِ ٱلرَّحِيمِ',
+              style: TextStyle(
+                fontSize: fontSize + 2,
+                height: 2.0,
+                fontFamily: 'UthmanicHafs',
+                fontWeight: FontWeight.w500,
+              ),
+              textAlign: TextAlign.center,
+              textDirection: TextDirection.rtl,
+            ),
+          ),
+        
+        // Verses
+        Container(
+          padding: EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: Color(0xfff7e7d0),
+            borderRadius: BorderRadius.circular(12),
+          ),
+          child: RichText(
+            textAlign: TextAlign.justify,
+            textDirection: TextDirection.rtl,
+            text: TextSpan(
+              children: _buildSurahVerses(surahContent),
+            ),
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+List<TextSpan> _buildSurahVerses(SurahContent surahContent) {
+  List<TextSpan> spans = [];
+  
+  for (int ayahNumber in surahContent.ayahsOnThisPage) {
+    String ayahText = quran.getVerse(surahContent.surahInfo.number, ayahNumber);
+    bool isCurrentlyPlaying = playingAyah == ayahNumber && 
+                             currentSurah.number == surahContent.surahInfo.number;
+
+    spans.add(
+      TextSpan(
+        text: ayahText,
+        style: TextStyle(
+          fontSize: fontSize,
+          wordSpacing: -2.5,
+          fontFamily: 'KFGQPC Uthmanic Script HAFS Regular',
+          fontWeight: FontWeight.w500,
+          color: isCurrentlyPlaying ? Colors.green[800] : Colors.black87,
+          backgroundColor: isCurrentlyPlaying ? Colors.green[100] : null,
+        ),
+        recognizer: TapGestureRecognizer()..onTap = () {
+          // Update current surah when ayah is tapped
+          currentSurah = surahContent.surahInfo;
+          _showAyahOptions(ayahNumber);
+        },
+      ),
+    );
+
+    // Add ayah number
+    spans.add(
+      TextSpan(
+        text: quran.getVerseEndSymbol(ayahNumber),
+        style: TextStyle(
+          fontSize: fontSize - 2,
+          color: Colors.black,
+          fontWeight: FontWeight.bold,
+        ),
+        recognizer: TapGestureRecognizer()..onTap = () {
+          currentSurah = surahContent.surahInfo;
+          _showAyahOptions(ayahNumber);
+        },
       ),
     );
   }
+
+  return spans;
+}
+//!
 
   Widget _buildSurahContent(SurahInfo surah) {
     // Calculate verses per page (you can adjust this number)
