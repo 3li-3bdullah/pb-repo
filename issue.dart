@@ -1856,7 +1856,7 @@ class _EditIssueScreenState extends State<EditIssueScreen> {
   }
 }
 
-// 7. All Issues Screen
+﻿// 7. All Issues Screen
 class AllIssuesScreen extends StatefulWidget {
   final List<IssueModel> issues;
 
@@ -1869,8 +1869,968 @@ class AllIssuesScreen extends StatefulWidget {
 class _AllIssuesScreenState extends State<AllIssuesScreen> {
   String searchQuery = '';
   String selectedFilter = 'All';
+  String selectedType = 'All';
+  String selectedSubtype = 'All';
+  String sortBy = 'Date';
+  bool isAscending = false;
 
-  List<IssueModel> get filteredIssues {
+  List<String> get issueTypes => ['All', 'Issue', 'Alert', 'Info'];
+  List<String> get issueSubtypes => ['All', 'Irrigation', 'Fertilization', 'Pest Control', 'Weather', 'Equipment'];
+  List<String> get statusFilters => ['All', 'Urgent', 'Approved', 'Resolved', 'Draft', 'Cancelled'];
+  List<String> get sortOptions => ['Date', 'Status', 'Type', 'Amount'];
+
+  List<IssueModel> get filteredAndSortedIssues {
     List<IssueModel> filtered = widget.issues;
     
-    if (searchQuery.isNot
+    // Apply search filter
+    if (searchQuery.isNotEmpty) {
+      filtered = filtered.where((issue) {
+        return issue.issueInput.toLowerCase().contains(searchQuery.toLowerCase()) ||
+               issue.subtype.toLowerCase().contains(searchQuery.toLowerCase()) ||
+               issue.type.toLowerCase().contains(searchQuery.toLowerCase()) ||
+               issue.farmerId.toLowerCase().contains(searchQuery.toLowerCase()) ||
+               issue.fieldId.toLowerCase().contains(searchQuery.toLowerCase());
+      }).toList();
+    }
+    
+    // Apply status filter
+    if (selectedFilter != 'All') {
+      filtered = filtered.where((issue) => issue.status == selectedFilter).toList();
+    }
+    
+    // Apply type filter
+    if (selectedType != 'All') {
+      filtered = filtered.where((issue) => issue.type == selectedType).toList();
+    }
+    
+    // Apply subtype filter
+    if (selectedSubtype != 'All') {
+      filtered = filtered.where((issue) => issue.subtype == selectedSubtype).toList();
+    }
+    
+    // Apply sorting
+    switch (sortBy) {
+      case 'Date':
+        filtered.sort((a, b) => isAscending 
+          ? a.datetime.compareTo(b.datetime)
+          : b.datetime.compareTo(a.datetime));
+        break;
+      case 'Status':
+        filtered.sort((a, b) => isAscending 
+          ? a.status.compareTo(b.status)
+          : b.status.compareTo(a.status));
+        break;
+      case 'Type':
+        filtered.sort((a, b) => isAscending 
+          ? a.type.compareTo(b.type)
+          : b.type.compareTo(a.type));
+        break;
+      case 'Amount':
+        filtered.sort((a, b) {
+          final aAmount = a.sdgAmount ?? 0;
+          final bAmount = b.sdgAmount ?? 0;
+          return isAscending 
+            ? aAmount.compareTo(bAmount)
+            : bAmount.compareTo(aAmount);
+        });
+        break;
+    }
+    
+    return filtered;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final filteredIssues = filteredAndSortedIssues;
+    
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      appBar: AppBar(
+        backgroundColor: AppColors.white,
+        foregroundColor: AppColors.black,
+        title: const Text(
+          'All Issues',
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.filter_list_rounded),
+            onPressed: _showFilterDialog,
+          ),
+          IconButton(
+            icon: Icon(isAscending ? Icons.arrow_upward : Icons.arrow_downward),
+            onPressed: () {
+              setState(() {
+                isAscending = !isAscending;
+              });
+            },
+          ),
+        ],
+      ),
+      body: Column(
+        children: [
+          // Search and Quick Filters
+          Container(
+            padding: const EdgeInsets.all(16),
+            color: AppColors.white,
+            child: Column(
+              children: [
+                // Search Bar
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  decoration: BoxDecoration(
+                    color: AppColors.background,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: AppColors.cardBorder),
+                  ),
+                  child: TextField(
+                    onChanged: (value) {
+                      setState(() {
+                        searchQuery = value;
+                      });
+                    },
+                    decoration: const InputDecoration(
+                      hintText: 'Search issues...',
+                      border: InputBorder.none,
+                      icon: Icon(Icons.search_rounded, color: AppColors.grey),
+                      hintStyle: TextStyle(color: AppColors.grey),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                
+                // Quick Filter Chips
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      ...statusFilters.map((status) => _buildFilterChip(status, selectedFilter, (value) {
+                        setState(() {
+                          selectedFilter = value;
+                        });
+                      })),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          
+          // Statistics Summary
+          Container(
+            margin: const EdgeInsets.all(16),
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: AppColors.white,
+              borderRadius: BorderRadius.circular(12),
+              boxShadow: [
+                BoxShadow(
+                  color: Colors.black.withOpacity(0.05),
+                  blurRadius: 10,
+                  offset: const Offset(0, 2),
+                ),
+              ],
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: [
+                _buildStatItem('Total', widget.issues.length.toString(), AppColors.infoBlue),
+                _buildStatItem('Urgent', widget.issues.where((i) => i.status == 'Urgent').length.toString(), AppColors.urgentRed),
+                _buildStatItem('Resolved', widget.issues.where((i) => i.status == 'Resolved').length.toString(), AppColors.successGreen),
+                _buildStatItem('Pending', widget.issues.where((i) => i.status == 'Approved').length.toString(), AppColors.warningOrange),
+              ],
+            ),
+          ),
+          
+          // Issues List
+          Expanded(
+            child: filteredIssues.isEmpty
+                ? _buildEmptyState()
+                : ListView.builder(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    itemCount: filteredIssues.length,
+                    itemBuilder: (context, index) {
+                      final issue = filteredIssues[index];
+                      return IssueCard(
+                        issue: issue,
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (context) => IssueDetailScreen(issue: issue),
+                            ),
+                          );
+                        },
+                      );
+                    },
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFilterChip(String label, String selectedValue, Function(String) onSelected) {
+    final isSelected = selectedValue == label;
+    return Container(
+      margin: const EdgeInsets.only(right: 8),
+      child: FilterChip(
+        selected: isSelected,
+        label: Text(label),
+        onSelected: (selected) {
+          onSelected(selected ? label : 'All');
+        },
+        backgroundColor: AppColors.white,
+        selectedColor: AppColors.primary.withOpacity(0.1),
+        checkmarkColor: AppColors.primary,
+        labelStyle: TextStyle(
+          color: isSelected ? AppColors.primary : AppColors.textSecondary,
+          fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+        ),
+        side: BorderSide(
+          color: isSelected ? AppColors.primary : AppColors.cardBorder,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStatItem(String label, String value, Color color) {
+    return Column(
+      children: [
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 24,
+            fontWeight: FontWeight.bold,
+            color: color,
+          ),
+        ),
+        const SizedBox(height: 4),
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 12,
+            color: AppColors.textSecondary,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildEmptyState() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: AppColors.lightGrey,
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: const Icon(
+              Icons.search_off_rounded,
+              size: 48,
+              color: AppColors.grey,
+            ),
+          ),
+          const SizedBox(height: 16),
+          const Text(
+            'No issues found',
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.w600,
+              color: AppColors.black,
+            ),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Try adjusting your search or filters',
+            style: TextStyle(
+              fontSize: 14,
+              color: AppColors.textSecondary,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showFilterDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Filter & Sort'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text('Type:', style: TextStyle(fontWeight: FontWeight.w600)),
+            DropdownButton<String>(
+              value: selectedType,
+              isExpanded: true,
+              items: issueTypes.map((type) => DropdownMenuItem(
+                value: type,
+                child: Text(type),
+              )).toList(),
+              onChanged: (value) {
+                setState(() {
+                  selectedType = value!;
+                });
+              },
+            ),
+            const SizedBox(height: 16),
+            const Text('Subtype:', style: TextStyle(fontWeight: FontWeight.w600)),
+            DropdownButton<String>(
+              value: selectedSubtype,
+              isExpanded: true,
+              items: issueSubtypes.map((subtype) => DropdownMenuItem(
+                value: subtype,
+                child: Text(subtype),
+              )).toList(),
+              onChanged: (value) {
+                setState(() {
+                  selectedSubtype = value!;
+                });
+              },
+            ),
+            const SizedBox(height: 16),
+            const Text('Sort by:', style: TextStyle(fontWeight: FontWeight.w600)),
+            DropdownButton<String>(
+              value: sortBy,
+              isExpanded: true,
+              items: sortOptions.map((option) => DropdownMenuItem(
+                value: option,
+                child: Text(option),
+              )).toList(),
+              onChanged: (value) {
+                setState(() {
+                  sortBy = value!;
+                });
+              },
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () {
+              setState(() {
+                selectedFilter = 'All';
+                selectedType = 'All';
+                selectedSubtype = 'All';
+                sortBy = 'Date';
+                isAscending = false;
+              });
+              Navigator.pop(context);
+            },
+            child: const Text('Reset'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Apply'),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// 8. Issue Detail Screen
+class IssueDetailScreen extends StatefulWidget {
+  final IssueModel issue;
+
+  const IssueDetailScreen({super.key, required this.issue});
+
+  @override
+  State<IssueDetailScreen> createState() => _IssueDetailScreenState();
+}
+
+class _IssueDetailScreenState extends State<IssueDetailScreen> {
+  late IssueModel issue;
+  final _responseController = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    issue = widget.issue;
+    _responseController.text = issue.issueResponse ?? '';
+  }
+
+  @override
+  void dispose() {
+    _responseController.dispose();
+    super.dispose();
+  }
+
+  Color _getStatusColor(String status) {
+    switch (status.toLowerCase()) {
+      case 'urgent':
+        return AppColors.urgentRed;
+      case 'approved':
+        return AppColors.warningOrange;
+      case 'draft':
+        return AppColors.infoBlue;
+      case 'resolved':
+        return AppColors.successGreen;
+      case 'cancelled':
+        return AppColors.grey;
+      default:
+        return AppColors.grey;
+    }
+  }
+
+  IconData _getIssueIcon(String subtype) {
+    switch (subtype.toLowerCase()) {
+      case 'irrigation':
+        return Icons.water_drop_outlined;
+      case 'fertilization':
+        return Icons.grass_outlined;
+      case 'pest control':
+        return Icons.bug_report_outlined;
+      case 'weather':
+        return Icons.cloud_outlined;
+      case 'equipment':
+        return Icons.build_outlined;
+      default:
+        return Icons.warning_outlined;
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      appBar: AppBar(
+        backgroundColor: AppColors.white,
+        foregroundColor: AppColors.black,
+        title: const Text(
+          'Issue Details',
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.edit_outlined),
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => EditIssueScreen(
+                    issue: issue,
+                    onIssueUpdated: (updatedIssue) {
+                      setState(() {
+                        issue = updatedIssue;
+                      });
+                    },
+                    onIssueDeleted: (deletedIssue) {
+                      Navigator.pop(context);
+                    },
+                  ),
+                ),
+              );
+            },
+          ),
+        ],
+      ),
+      body: SingleChildScrollView(
+        child: Column(
+          children: [
+            // Issue Header Card
+            Container(
+              margin: const EdgeInsets.all(16),
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: AppColors.white,
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.05),
+                    blurRadius: 10,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(16),
+                        decoration: BoxDecoration(
+                          color: AppColors.primary.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(16),
+                        ),
+                        child: Icon(
+                          _getIssueIcon(issue.subtype),
+                          color: AppColors.primary,
+                          size: 32,
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              issue.subtype,
+                              style: const TextStyle(
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                                color: AppColors.black,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 6,
+                              ),
+                              decoration: BoxDecoration(
+                                color: _getStatusColor(issue.status).withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Text(
+                                issue.status,
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                  color: _getStatusColor(issue.status),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+                  const Text(
+                    'Issue Description',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.black,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    issue.issueInput,
+                    style: const TextStyle(
+                      fontSize: 16,
+                      color: AppColors.textSecondary,
+                      height: 1.5,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+
+            // Details Card
+            Container(
+              margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: AppColors.white,
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.05),
+                    blurRadius: 10,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Details',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.black,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  _buildDetailRow('Issue ID', issue.id),
+                  _buildDetailRow('Type', issue.type),
+                  _buildDetailRow('Category', issue.subtype),
+                  _buildDetailRow('Item', issue.item),
+                  _buildDetailRow('Farmer ID', issue.farmerId),
+                  _buildDetailRow('Field ID', issue.fieldId),
+                  _buildDetailRow('Created', _formatDateTime(issue.datetime)),
+                  _buildDetailRow('Last Updated', _formatDateTime(issue.statusTime)),
+                  if (issue.sdgAmount != null)
+                    _buildDetailRow('Amount', '${issue.sdgAmount!.toStringAsFixed(2)} SDG'),
+                ],
+              ),
+            ),
+
+            // Response Card
+            Container(
+              margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                color: AppColors.white,
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.05),
+                    blurRadius: 10,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Response',
+                    style: TextStyle(
+                      fontSize: 18,
+                      fontWeight: FontWeight.bold,
+                      color: AppColors.black,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  if (issue.issueResponse != null && issue.issueResponse!.isNotEmpty)
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: AppColors.successGreen.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: AppColors.successGreen.withOpacity(0.2),
+                        ),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(
+                                Icons.check_circle_outline,
+                                color: AppColors.successGreen,
+                                size: 20,
+                              ),
+                              const SizedBox(width: 8),
+                              const Text(
+                                'Response Provided',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w600,
+                                  color: AppColors.successGreen,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            issue.issueResponse!,
+                            style: const TextStyle(
+                              fontSize: 16,
+                              color: AppColors.black,
+                              height: 1.5,
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                  else
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: AppColors.warningOrange.withOpacity(0.1),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(
+                          color: AppColors.warningOrange.withOpacity(0.2),
+                        ),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(
+                            Icons.pending_outlined,
+                            color: AppColors.warningOrange,
+                            size: 20,
+                          ),
+                          const SizedBox(width: 8),
+                          const Text(
+                            'No response provided yet',
+                            style: TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                              color: AppColors.warningOrange,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                ],
+              ),
+            ),
+
+            // Action Buttons
+            Container(
+              margin: const EdgeInsets.all(16),
+              child: Column(
+                children: [
+                  if (issue.status != 'Resolved')
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: () {
+                          _showAddResponseDialog();
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppColors.primary,
+                          foregroundColor: AppColors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: const Text(
+                          'Add Response',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ),
+                    ),
+                  const SizedBox(height: 12),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () {
+                            _showStatusUpdateDialog();
+                          },
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: AppColors.primary,
+                            side: const BorderSide(color: AppColors.primary),
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          child: const Text(
+                            'Update Status',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () {
+                            // Share functionality
+                            _shareIssue();
+                          },
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: AppColors.infoBlue,
+                            side: const BorderSide(color: AppColors.infoBlue),
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
+                          child: const Text(
+                            'Share',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDetailRow(String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 120,
+            child: Text(
+              label,
+              style: const TextStyle(
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
+                color: AppColors.textSecondary,
+              ),
+            ),
+          ),
+          Expanded(
+            child: Text(
+              value,
+              style: const TextStyle(
+                fontSize: 14,
+                color: AppColors.black,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _formatDateTime(DateTime dateTime) {
+    return '${dateTime.day}/${dateTime.month}/${dateTime.year} ${dateTime.hour}:${dateTime.minute.toString().padLeft(2, '0')}';
+  }
+
+  void _showAddResponseDialog() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Add Response'),
+        content: TextField(
+          controller: _responseController,
+          maxLines: 4,
+          decoration: const InputDecoration(
+            hintText: 'Enter your response...',
+            border: OutlineInputBorder(),
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              setState(() {
+                issue = issue.copyWith(
+                  issueResponse: _responseController.text,
+                  status: 'Resolved',
+                  statusTime: DateTime.now(),
+                );
+              });
+              Navigator.pop(context);
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Response added successfully')),
+              );
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showStatusUpdateDialog() {
+    String newStatus = issue.status;
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Update Status'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            RadioListTile<String>(
+              title: const Text('Urgent'),
+              value: 'Urgent',
+              groupValue: newStatus,
+              onChanged: (value) {
+                newStatus = value!;
+              },
+            ),
+            RadioListTile<String>(
+              title: const Text('Approved'),
+              value: 'Approved',
+              groupValue: newStatus,
+              onChanged: (value) {
+                newStatus = value!;
+              },
+            ),
+            RadioListTile<String>(
+              title: const Text('Resolved'),
+              value: 'Resolved',
+              groupValue: newStatus,
+              onChanged: (value) {
+                newStatus = value!;
+              },
+            ),
+            RadioListTile<String>(
+              title: const Text('Cancelled'),
+              value: 'Cancelled',
+              groupValue: newStatus,
+              onChanged: (value) {
+                newStatus = value!;
+              },
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              setState(() {
+                issue = issue.copyWith(
+                  status: newStatus,
+                  statusTime: DateTime.now(),
+                );
+              });
+              Navigator.pop(context);
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Status updated to $newStatus')),
+              );
+            },
+            child: const Text('Update'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _shareIssue() {
+    final shareText = '''
+Issue Report
+-----------
+ID: ${issue.id}
+Type: ${issue.type}
+Category: ${issue.subtype}
+Description: ${issue.issueInput}
+Status: ${issue.status}
+Farmer: ${issue.farmerId}
+Field: ${issue.fieldId}
+Created: ${_formatDateTime(issue.datetime)}
+${issue.sdgAmount != null ? 'Amount: ${issue.sdgAmount} SDG' : ''}
+${issue.issueResponse != null ? 'Response: ${issue.issueResponse}' : ''}
+''';
+    
+    // In a real app, you would use share_plus package
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(content: Text('Share functionality would be implemented here')),
+    );
+  }
+}
+
+// Additional helper methods for the main screen (continuing from where it was cut off)
+class _AddIssueScreenState extends State<AddIssueScreen>
