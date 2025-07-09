@@ -976,7 +976,901 @@ class AddIssueScreen extends StatefulWidget {
   State<AddIssueScreen> createState() => _AddIssueScreenState();
 }
 
-class _AddIssueScreenState extends State<AddIssueScreen> {
+class _AddIssueScreenState extends State<AddIssueScreen> with TickerProviderStateMixin {
   final _formKey = GlobalKey<FormState>();
   final _issueInputController = TextEditingController();
-  final _farmerIdController = Text
+  final _farmerIdController = TextEditingController();
+  final _fieldIdController = TextEditingController();
+  final _sdgAmountController = TextEditingController();
+  final _issueResponseController = TextEditingController();
+
+  String selectedType = 'Issue';
+  String selectedSubtype = 'Irrigation';
+  String selectedItem = 'Field';
+  String selectedStatus = 'Draft';
+  DateTime selectedDate = DateTime.now();
+  
+  late AnimationController _animationController;
+  late Animation<double> _slideAnimation;
+  late Animation<double> _fadeAnimation;
+
+  final List<String> issueTypes = ['Issue', 'Info', 'Alert'];
+  final List<String> subtypes = ['Irrigation', 'Fertilization', 'Pest Control', 'Weather', 'Equipment', 'Other'];
+  final List<String> items = ['Weather station', 'Satellite', 'Farmer', 'Field', 'Other'];
+  final List<String> statuses = ['Draft', 'Approved', 'Resolved', 'Cancelled', 'Urgent'];
+
+  @override
+  void initState() {
+    super.initState();
+    _animationController = AnimationController(
+      duration: const Duration(milliseconds: 800),
+      vsync: this,
+    );
+    _slideAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _animationController, curve: Curves.easeOutBack),
+    );
+    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _animationController, curve: Curves.easeInOut),
+    );
+    _animationController.forward();
+  }
+
+  @override
+  void dispose() {
+    _animationController.dispose();
+    _issueInputController.dispose();
+    _farmerIdController.dispose();
+    _fieldIdController.dispose();
+    _sdgAmountController.dispose();
+    _issueResponseController.dispose();
+    super.dispose();
+  }
+
+  void _selectDate() async {
+    final DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: selectedDate,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2030),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: const ColorScheme.light(
+              primary: AppColors.primary,
+              onPrimary: AppColors.white,
+              surface: AppColors.white,
+              onSurface: AppColors.black,
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+    if (picked != null && picked != selectedDate) {
+      setState(() {
+        selectedDate = picked;
+      });
+    }
+  }
+
+  void _saveIssue() {
+    if (_formKey.currentState!.validate()) {
+      final newIssue = IssueModel(
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        datetime: selectedDate,
+        type: selectedType,
+        subtype: selectedSubtype,
+        item: selectedItem,
+        farmerId: _farmerIdController.text.isEmpty ? 'F001' : _farmerIdController.text,
+        fieldId: _fieldIdController.text.isEmpty ? 'FIELD001' : _fieldIdController.text,
+        issueInput: _issueInputController.text,
+        issueResponse: _issueResponseController.text.isEmpty ? null : _issueResponseController.text,
+        sdgAmount: _sdgAmountController.text.isEmpty ? null : double.tryParse(_sdgAmountController.text),
+        status: selectedStatus,
+        statusTime: DateTime.now(),
+      );
+
+      widget.onIssueAdded(newIssue);
+      Navigator.pop(context);
+      
+      // Show success message
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Issue added successfully'),
+          backgroundColor: AppColors.successGreen,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ),
+      );
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      appBar: AppBar(
+        backgroundColor: AppColors.white,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_rounded, color: AppColors.black),
+          onPressed: () => Navigator.pop(context),
+        ),
+        title: const Text(
+          'Add New Issue',
+          style: TextStyle(
+            color: AppColors.black,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        actions: [
+          Container(
+            margin: const EdgeInsets.only(right: 16),
+            child: TextButton(
+              onPressed: _saveIssue,
+              style: TextButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: AppColors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+              ),
+              child: const Text(
+                'Save',
+                style: TextStyle(fontWeight: FontWeight.w600),
+              ),
+            ),
+          ),
+        ],
+      ),
+      body: FadeTransition(
+        opacity: _fadeAnimation,
+        child: SlideTransition(
+          position: Tween<Offset>(
+            begin: const Offset(0, 0.3),
+            end: Offset.zero,
+          ).animate(_slideAnimation),
+          child: Form(
+            key: _formKey,
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Header Card
+                  Container(
+                    padding: const EdgeInsets.all(24),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: [AppColors.primary, AppColors.secondary],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: [
+                        BoxShadow(
+                          color: AppColors.primary.withOpacity(0.3),
+                          blurRadius: 15,
+                          offset: const Offset(0, 5),
+                        ),
+                      ],
+                    ),
+                    child: const Row(
+                      children: [
+                        Icon(
+                          Icons.add_task_rounded,
+                          color: AppColors.white,
+                          size: 32,
+                        ),
+                        SizedBox(width: 16),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'New Issue Report',
+                                style: TextStyle(
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.bold,
+                                  color: AppColors.white,
+                                ),
+                              ),
+                              SizedBox(height: 4),
+                              Text(
+                                'Fill in the details below',
+                                style: TextStyle(
+                                  fontSize: 14,
+                                  color: AppColors.white,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  
+                  const SizedBox(height: 24),
+                  
+                  // Basic Information Section
+                  _buildSectionCard(
+                    title: 'Basic Information',
+                    icon: Icons.info_outline_rounded,
+                    children: [
+                      _buildDropdownField(
+                        label: 'Issue Type',
+                        value: selectedType,
+                        items: issueTypes,
+                        onChanged: (value) => setState(() => selectedType = value!),
+                        icon: Icons.category_outlined,
+                      ),
+                      
+                      const SizedBox(height: 16),
+                      
+                      _buildDropdownField(
+                        label: 'Subtype',
+                        value: selectedSubtype,
+                        items: subtypes,
+                        onChanged: (value) => setState(() => selectedSubtype = value!),
+                        icon: Icons.label_outline_rounded,
+                      ),
+                      
+                      const SizedBox(height: 16),
+                      
+                      _buildDropdownField(
+                        label: 'Item',
+                        value: selectedItem,
+                        items: items,
+                        onChanged: (value) => setState(() => selectedItem = value!),
+                        icon: Icons.inventory_2_outlined,
+                      ),
+                      
+                      const SizedBox(height: 16),
+                      
+                      _buildDateField(),
+                    ],
+                  ),
+                  
+                  const SizedBox(height: 16),
+                  
+                  // Issue Details Section
+                  _buildSectionCard(
+                    title: 'Issue Details',
+                    icon: Icons.description_outlined,
+                    children: [
+                      _buildTextFormField(
+                        controller: _issueInputController,
+                        label: 'Issue Description',
+                        hint: 'Describe the issue in detail...',
+                        icon: Icons.edit_outlined,
+                        maxLines: 4,
+                        validator: (value) {
+                          if (value == null || value.isEmpty) {
+                            return 'Please enter issue description';
+                          }
+                          return null;
+                        },
+                      ),
+                      
+                      const SizedBox(height: 16),
+                      
+                      _buildTextFormField(
+                        controller: _issueResponseController,
+                        label: 'Response/Solution (Optional)',
+                        hint: 'Enter response or solution if available...',
+                        icon: Icons.lightbulb_outline_rounded,
+                        maxLines: 3,
+                      ),
+                    ],
+                  ),
+                  
+                  const SizedBox(height: 16),
+                  
+                  // Location & Cost Section
+                  _buildSectionCard(
+                    title: 'Location & Cost',
+                    icon: Icons.place_outlined,
+                    children: [
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _buildTextFormField(
+                              controller: _farmerIdController,
+                              label: 'Farmer ID',
+                              hint: 'F001',
+                              icon: Icons.person_outline_rounded,
+                            ),
+                          ),
+                          const SizedBox(width: 16),
+                          Expanded(
+                            child: _buildTextFormField(
+                              controller: _fieldIdController,
+                              label: 'Field ID',
+                              hint: 'FIELD001',
+                              icon: Icons.landscape_outlined,
+                            ),
+                          ),
+                        ],
+                      ),
+                      
+                      const SizedBox(height: 16),
+                      
+                      _buildTextFormField(
+                        controller: _sdgAmountController,
+                        label: 'SDG Amount (Optional)',
+                        hint: '0.00',
+                        icon: Icons.attach_money_rounded,
+                        keyboardType: TextInputType.number,
+                      ),
+                    ],
+                  ),
+                  
+                  const SizedBox(height: 16),
+                  
+                  // Status Section
+                  _buildSectionCard(
+                    title: 'Status',
+                    icon: Icons.flag_outlined,
+                    children: [
+                      _buildDropdownField(
+                        label: 'Issue Status',
+                        value: selectedStatus,
+                        items: statuses,
+                        onChanged: (value) => setState(() => selectedStatus = value!),
+                        icon: Icons.flag_circle_outlined,
+                      ),
+                    ],
+                  ),
+                  
+                  const SizedBox(height: 32),
+                  
+                  // Action Buttons
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton(
+                          onPressed: () => Navigator.pop(context),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: AppColors.textSecondary,
+                            side: const BorderSide(color: AppColors.cardBorder),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                          ),
+                          child: const Text(
+                            'Cancel',
+                            style: TextStyle(fontWeight: FontWeight.w600),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        flex: 2,
+                        child: ElevatedButton(
+                          onPressed: _saveIssue,
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppColors.primary,
+                            foregroundColor: AppColors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            elevation: 3,
+                          ),
+                          child: const Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(Icons.save_outlined, size: 18),
+                              SizedBox(width: 8),
+                              Text(
+                                'Save Issue',
+                                style: TextStyle(fontWeight: FontWeight.w600),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  
+                  const SizedBox(height: 24),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSectionCard({
+    required String title,
+    required IconData icon,
+    required List<Widget> children,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: AppColors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: AppColors.cardBorder),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Icon(
+                  icon,
+                  color: AppColors.primary,
+                  size: 20,
+                ),
+              ),
+              const SizedBox(width: 12),
+              Text(
+                title,
+                style: const TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.bold,
+                  color: AppColors.black,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          ...children,
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTextFormField({
+    required TextEditingController controller,
+    required String label,
+    required String hint,
+    required IconData icon,
+    int maxLines = 1,
+    TextInputType keyboardType = TextInputType.text,
+    String? Function(String?)? validator,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+            color: AppColors.black,
+          ),
+        ),
+        const SizedBox(height: 8),
+        TextFormField(
+          controller: controller,
+          maxLines: maxLines,
+          keyboardType: keyboardType,
+          validator: validator,
+          decoration: InputDecoration(
+            hintText: hint,
+            prefixIcon: Icon(icon, color: AppColors.primary),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: AppColors.cardBorder),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: AppColors.cardBorder),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: AppColors.primary, width: 2),
+            ),
+            errorBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: AppColors.urgentRed),
+            ),
+            focusedErrorBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: AppColors.urgentRed, width: 2),
+            ),
+            filled: true,
+            fillColor: AppColors.white,
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDropdownField({
+    required String label,
+    required String value,
+    required List<String> items,
+    required ValueChanged<String?> onChanged,
+    required IconData icon,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: const TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+            color: AppColors.black,
+          ),
+        ),
+        const SizedBox(height: 8),
+        DropdownButtonFormField<String>(
+          value: value,
+          onChanged: onChanged,
+          items: items.map((item) {
+            return DropdownMenuItem(
+              value: item,
+              child: Text(item),
+            );
+          }).toList(),
+          decoration: InputDecoration(
+            prefixIcon: Icon(icon, color: AppColors.primary),
+            border: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: AppColors.cardBorder),
+            ),
+            enabledBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: AppColors.cardBorder),
+            ),
+            focusedBorder: OutlineInputBorder(
+              borderRadius: BorderRadius.circular(12),
+              borderSide: const BorderSide(color: AppColors.primary, width: 2),
+            ),
+            filled: true,
+            fillColor: AppColors.white,
+            contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDateField() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          'Date',
+          style: TextStyle(
+            fontSize: 14,
+            fontWeight: FontWeight.w600,
+            color: AppColors.black,
+          ),
+        ),
+        const SizedBox(height: 8),
+        InkWell(
+          onTap: _selectDate,
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+            decoration: BoxDecoration(
+              border: Border.all(color: AppColors.cardBorder),
+              borderRadius: BorderRadius.circular(12),
+              color: AppColors.white,
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.calendar_today_outlined, color: AppColors.primary),
+                const SizedBox(width: 16),
+                Text(
+                  '${selectedDate.day}/${selectedDate.month}/${selectedDate.year}',
+                  style: const TextStyle(
+                    fontSize: 16,
+                    color: AppColors.black,
+                  ),
+                ),
+                const Spacer(),
+                const Icon(Icons.arrow_drop_down, color: AppColors.textSecondary),
+              ],
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// 6. Edit Issue Screen
+class EditIssueScreen extends StatefulWidget {
+  final IssueModel issue;
+  final Function(IssueModel) onIssueUpdated;
+  final Function(IssueModel) onIssueDeleted;
+
+  const EditIssueScreen({
+    super.key,
+    required this.issue,
+    required this.onIssueUpdated,
+    required this.onIssueDeleted,
+  });
+
+  @override
+  State<EditIssueScreen> createState() => _EditIssueScreenState();
+}
+
+class _EditIssueScreenState extends State<EditIssueScreen> {
+  final _formKey = GlobalKey<FormState>();
+  late TextEditingController _issueInputController;
+  late TextEditingController _farmerIdController;
+  late TextEditingController _fieldIdController;
+  late TextEditingController _sdgAmountController;
+  late TextEditingController _issueResponseController;
+
+  late String selectedType;
+  late String selectedSubtype;
+  late String selectedItem;
+  late String selectedStatus;
+  late DateTime selectedDate;
+
+  final List<String> issueTypes = ['Issue', 'Info', 'Alert'];
+  final List<String> subtypes = ['Irrigation', 'Fertilization', 'Pest Control', 'Weather', 'Equipment', 'Other'];
+  final List<String> items = ['Weather station', 'Satellite', 'Farmer', 'Field', 'Other'];
+  final List<String> statuses = ['Draft', 'Approved', 'Resolved', 'Cancelled', 'Urgent'];
+
+  @override
+  void initState() {
+    super.initState();
+    _issueInputController = TextEditingController(text: widget.issue.issueInput);
+    _farmerIdController = TextEditingController(text: widget.issue.farmerId);
+    _fieldIdController = TextEditingController(text: widget.issue.fieldId);
+    _sdgAmountController = TextEditingController(text: widget.issue.sdgAmount?.toString() ?? '');
+    _issueResponseController = TextEditingController(text: widget.issue.issueResponse ?? '');
+    
+    selectedType = widget.issue.type;
+    selectedSubtype = widget.issue.subtype;
+    selectedItem = widget.issue.item;
+    selectedStatus = widget.issue.status;
+    selectedDate = widget.issue.datetime;
+  }
+
+  @override
+  void dispose() {
+    _issueInputController.dispose();
+    _farmerIdController.dispose();
+    _fieldIdController.dispose();
+    _sdgAmountController.dispose();
+    _issueResponseController.dispose();
+    super.dispose();
+  }
+
+  void _selectDate() async {
+    final DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: selectedDate,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2030),
+      builder: (context, child) {
+        return Theme(
+          data: Theme.of(context).copyWith(
+            colorScheme: const ColorScheme.light(
+              primary: AppColors.primary,
+              onPrimary: AppColors.white,
+              surface: AppColors.white,
+              onSurface: AppColors.black,
+            ),
+          ),
+          child: child!,
+        );
+      },
+    );
+    if (picked != null && picked != selectedDate) {
+      setState(() {
+        selectedDate = picked;
+      });
+    }
+  }
+
+  void _updateIssue() {
+    if (_formKey.currentState!.validate()) {
+      final updatedIssue = widget.issue.copyWith(
+        datetime: selectedDate,
+        type: selectedType,
+        subtype: selectedSubtype,
+        item: selectedItem,
+        farmerId: _farmerIdController.text,
+        fieldId: _fieldIdController.text,
+        issueInput: _issueInputController.text,
+        issueResponse: _issueResponseController.text.isEmpty ? null : _issueResponseController.text,
+        sdgAmount: _sdgAmountController.text.isEmpty ? null : double.tryParse(_sdgAmountController.text),
+        status: selectedStatus,
+        statusTime: DateTime.now(),
+      );
+
+      widget.onIssueUpdated(updatedIssue);
+      Navigator.pop(context);
+      
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Issue updated successfully'),
+          backgroundColor: AppColors.successGreen,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ),
+      );
+    }
+  }
+
+  void _deleteIssue() {
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Issue'),
+        content: const Text('Are you sure you want to delete this issue? This action cannot be undone.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () {
+              widget.onIssueDeleted(widget.issue);
+              Navigator.pop(context); // Close dialog
+              Navigator.pop(context); // Close edit screen
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: const Text('Issue deleted successfully'),
+                  backgroundColor: AppColors.urgentRed,
+                  behavior: SnackBarBehavior.floating,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                ),
+              );
+            },
+            style: TextButton.styleFrom(foregroundColor: AppColors.urgentRed),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      appBar: AppBar(
+        backgroundColor: AppColors.white,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_ios_rounded, color: AppColors.black),
+          onPressed: () => Navigator.pop(context),
+        ),
+        title: const Text(
+          'Edit Issue',
+          style: TextStyle(
+            color: AppColors.black,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.delete_outline, color: AppColors.urgentRed),
+            onPressed: _deleteIssue,
+          ),
+          Container(
+            margin: const EdgeInsets.only(right: 16),
+            child: TextButton(
+              onPressed: _updateIssue,
+              style: TextButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                foregroundColor: AppColors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+              ),
+              child: const Text(
+                'Update',
+                style: TextStyle(fontWeight: FontWeight.w600),
+              ),
+            ),
+          ),
+        ],
+      ),
+      body: Form(
+        key: _formKey,
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Same form fields as AddIssueScreen but with pre-filled values
+              // ... (Similar implementation to AddIssueScreen)
+              
+              // Action Buttons
+              Row(
+                children: [
+                  Expanded(
+                    child: OutlinedButton(
+                      onPressed: () => Navigator.pop(context),
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: AppColors.textSecondary,
+                        side: const BorderSide(color: AppColors.cardBorder),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                      ),
+                      child: const Text(
+                        'Cancel',
+                        style: TextStyle(fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    flex: 2,
+                    child: ElevatedButton(
+                      onPressed: _updateIssue,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.primary,
+                        foregroundColor: AppColors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        elevation: 3,
+                      ),
+                      child: const Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(Icons.update_outlined, size: 18),
+                          SizedBox(width: 8),
+                          Text(
+                            'Update Issue',
+                            style: TextStyle(fontWeight: FontWeight.w600),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              
+              const SizedBox(height: 24),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// 7. All Issues Screen
+class AllIssuesScreen extends StatefulWidget {
+  final List<IssueModel> issues;
+
+  const AllIssuesScreen({super.key, required this.issues});
+
+  @override
+  State<AllIssuesScreen> createState() => _AllIssuesScreenState();
+}
+
+class _AllIssuesScreenState extends State<AllIssuesScreen> {
+  String searchQuery = '';
+  String selectedFilter = 'All';
+
+  List<IssueModel> get filteredIssues {
+    List<IssueModel> filtered = widget.issues;
+    
+    if (searchQuery.isNot
